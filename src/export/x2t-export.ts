@@ -10,6 +10,10 @@ let initPromise: Promise<X2TModule> | null = null;
 
 const defaultDocxMime =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const defaultXlsxMime =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const defaultPptxMime =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 const supportedExtensions = new Set([
   "docx",
@@ -17,6 +21,7 @@ const supportedExtensions = new Set([
   "odt",
   "txt",
   "rtf",
+  "bin",
   "xlsx",
   "xls",
   "ods",
@@ -64,26 +69,30 @@ function inferExtensionFromMime(mime: string) {
   return mimeToExtension[normalized] ?? null;
 }
 
-function resolveSourceName(source: Blob) {
+function resolveSourceName(source: Blob, sourceNameHint?: string) {
+  const hintExt = sourceNameHint ? getExtensionFromName(sourceNameHint) : null;
+
   if (source instanceof File) {
-    const extFromName = getExtensionFromName(source.name);
+    const extFromName = hintExt ?? getExtensionFromName(source.name);
     const extFromMime = inferExtensionFromMime(source.type);
     const ext = extFromName ?? extFromMime ?? "docx";
     if (!supportedExtensions.has(ext)) {
       throw new Error(`Unsupported source file type: ${ext}`);
     }
-    const name = extFromName ? source.name : `document.${ext}`;
-    return { name, ext };
+    const name = extFromName ? (sourceNameHint ?? source.name) : `document.${ext}`;
+    return { name, ext, extFromName };
   }
 
-  const ext = inferExtensionFromMime(source.type);
+  const extFromMime = inferExtensionFromMime(source.type);
+  const ext = hintExt ?? extFromMime;
   if (!ext) {
     throw new Error(`Unsupported source MIME type: ${source.type || "(empty)"}`);
   }
   if (!supportedExtensions.has(ext)) {
     throw new Error(`Unsupported source file type: ${ext}`);
   }
-  return { name: `document.${ext}`, ext };
+  const name = sourceNameHint ?? `document.${ext}`;
+  return { name, ext, extFromName: hintExt };
 }
 
 function prepareWorkingDir(FS: any) {
@@ -130,14 +139,52 @@ function buildParamsXml(fileFrom: string, fileTo: string) {
   ].join("");
 }
 
-export async function exportWithX2T(source: Blob, format: ExportFormat) {
-  if (format === "docx") {
-    const extFromName = source instanceof File ? getExtensionFromName(source.name) : null;
-    const extFromMime = inferExtensionFromMime(source.type);
-    const ext = extFromName ?? extFromMime ?? "docx";
-    if (ext === "docx") {
-      return source;
+function ensureDir(FS: any, dir: string) {
+  const parts = dir.split("/").filter(Boolean);
+  let current = "";
+  for (const part of parts) {
+    current += `/${part}`;
+    try {
+      if (!FS.analyzePath(current).exists) {
+        FS.mkdir(current);
+      }
+    } catch {
+      // Directory may already exist or be invalid; ignore and continue.
     }
+  }
+}
+
+function writeMediaFiles(FS: any, media?: Record<string, Uint8Array>) {
+  if (!media) return;
+  for (const [key, value] of Object.entries(media)) {
+    const relative = key.replace(/^\.\/+/, "");
+    const path = relative.startsWith("media/") ? `/working/${relative}` : `/working/media/${relative}`;
+    const dir = path.slice(0, path.lastIndexOf("/"));
+    if (dir) {
+      ensureDir(FS, dir);
+    }
+    try {
+      FS.writeFile(path, value);
+    } catch (error) {
+      console.warn("Failed to write media file", key, error);
+    }
+  }
+}
+
+export async function exportWithX2T(
+  source: Blob,
+  format: ExportFormat,
+  options?: { sourceName?: string; media?: Record<string, Uint8Array> }
+) {
+  const resolvedName = resolveSourceName(source, options?.sourceName);
+  const ext = resolvedName.ext;
+  // Only bypass conversion when the source name explicitly matches the target format.
+  if (
+    resolvedName.extFromName &&
+    format === resolvedName.extFromName &&
+    (format === "docx" || format === "xlsx" || format === "pptx")
+  ) {
+    return source;
   }
 
   const module = await initX2TModule();
@@ -146,7 +193,7 @@ export async function exportWithX2T(source: Blob, format: ExportFormat) {
     throw new Error("x2t FS is not available");
   }
 
-  const { name } = resolveSourceName(source);
+  const { name } = resolvedName;
   const sourcePath = `/working/${name}`;
   const outputPath = `/working/export.${format}`;
 
@@ -154,6 +201,7 @@ export async function exportWithX2T(source: Blob, format: ExportFormat) {
 
   const arrayBuffer = await source.arrayBuffer();
   FS.writeFile(sourcePath, new Uint8Array(arrayBuffer));
+  writeMediaFiles(FS, options?.media);
 
   const paramsXml = buildParamsXml(sourcePath, outputPath);
   FS.writeFile("/working/params.xml", paramsXml);
@@ -169,6 +217,12 @@ export async function exportWithX2T(source: Blob, format: ExportFormat) {
   }
 
   const output = FS.readFile(outputPath);
-  const mime = format === "pdf" ? "application/pdf" : defaultDocxMime;
+  const mimeByFormat: Record<ExportFormat, string> = {
+    pdf: "application/pdf",
+    docx: defaultDocxMime,
+    xlsx: defaultXlsxMime,
+    pptx: defaultPptxMime,
+  };
+  const mime = mimeByFormat[format] ?? defaultDocxMime;
   return new Blob([output], { type: mime });
 }

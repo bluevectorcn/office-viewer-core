@@ -10,6 +10,7 @@ const staticDirs = [
 
 const mimeTypes: Record<string, string> = {
   ".html": "text/html",
+  ".htm": "text/html",
   ".js": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",

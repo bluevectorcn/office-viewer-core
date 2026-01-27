@@ -108,6 +108,8 @@ class FakeSocketManager {
   }
 }
 
+const socketRegistry = new Set<FakeSocket>();
+
 export class FakeSocket {
   connected = false;
   io: FakeSocketManager;
@@ -123,6 +125,7 @@ export class FakeSocket {
   constructor(options?: FakeSocketOptions) {
     this.io = new FakeSocketManager(options);
     this.auth = options?.auth;
+    socketRegistry.add(this);
     queueMicrotask(() => this.connect());
   }
 
@@ -196,11 +199,28 @@ export class FakeSocket {
     if (!this.connected) return this;
     this.connected = false;
     this.emitLocal("disconnect", reason);
+    socketRegistry.delete(this);
     return this;
   }
 
   close() {
     return this.disconnect("io client disconnect");
+  }
+
+  matchesDocId(docId: string) {
+    if (!docId) return false;
+    const cmd = this.openCmd;
+    if (!cmd) return false;
+    return (
+      cmd.id === docId ||
+      cmd.key === docId ||
+      cmd.docId === docId ||
+      cmd.url === docId
+    );
+  }
+
+  emitServerMessage(message: unknown) {
+    this.emitLocal("message", message);
   }
 
   private handleMessage(payload: unknown) {
@@ -440,6 +460,17 @@ export class FakeSocket {
   private emitLocal(event: string, ...args: unknown[]) {
     this.events.emit(event, ...args);
   }
+}
+
+export function emitServerMessage(docId: string, message: unknown) {
+  let delivered = false;
+  for (const socket of socketRegistry) {
+    if (!socket.connected) continue;
+    if (!socket.matchesDocId(docId)) continue;
+    socket.emitServerMessage(message);
+    delivered = true;
+  }
+  return delivered;
 }
 
 function normalizeImagePath(name: string) {

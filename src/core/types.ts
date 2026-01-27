@@ -1,5 +1,5 @@
 export type EditorInput = File | Blob | ArrayBuffer | string;
-export type ExportFormat = "pdf" | "docx";
+export type ExportFormat = "pdf" | "docx" | "xlsx" | "pptx";
 export type DocumentType = 'word' | 'cell' | 'slide' | 'pdf';
 export type Mode = 'view' | 'edit';
 export type ToolbarDocked = 'top' | 'bottom';

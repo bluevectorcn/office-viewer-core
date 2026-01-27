@@ -16,6 +16,7 @@ export interface ConvertedInput {
   blob: Blob;
   objectUrl: string;
   images: Record<string, string>;
+  mediaData: Record<string, Uint8Array>;
 }
 
 const defaultDocxMime =
@@ -174,7 +175,7 @@ export async function convertWithX2T(input: PreparedInput): Promise<ConvertedInp
   const bin = FS.readFile("/working/Editor.bin");
   const blob = new Blob([bin], { type: "application/octet-stream" });
   const objectUrl = URL.createObjectURL(blob);
-  const images = collectImages(FS);
+  const { images, mediaData } = collectMedia(FS);
 
   return {
     url: objectUrl,
@@ -184,12 +185,14 @@ export async function convertWithX2T(input: PreparedInput): Promise<ConvertedInp
     blob,
     objectUrl,
     images,
+    mediaData,
   };
 }
 
-function collectImages(FS: any) {
+function collectMedia(FS: any) {
   const root = "/working/media";
   const images: Record<string, string> = {};
+  const mediaData: Record<string, Uint8Array> = {};
 
   const guessMime = (name: string) => {
     const lower = name.toLowerCase();
@@ -214,6 +217,7 @@ function collectImages(FS: any) {
         continue;
       }
       const data = FS.readFile(fullPath);
+      mediaData[relPath] = new Uint8Array(data);
       const blob = new Blob([data], { type: guessMime(relPath) });
       images[relPath] = URL.createObjectURL(blob);
     }
@@ -227,5 +231,5 @@ function collectImages(FS: any) {
     // No media output.
   }
 
-  return images;
+  return { images, mediaData };
 }
