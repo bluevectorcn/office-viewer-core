@@ -4,13 +4,13 @@ import path from "node:path";
 
 const rootDir = process.cwd();
 const mainPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf-8"));
-const fullVersion = mainPkg.onlyoffice?.version; // 例如 "9.3.0.67"
+const fullVersion = mainPkg.onlyoffice?.version || "9.3.0.1"; // 例如 "9.3.0.67"
 const submoduleDir = path.join(rootDir, mainPkg.onlyoffice?.submodule ?? "submodules/onlyoffice/web-apps");
 const sdkjsDir = path.join(rootDir, "submodules/onlyoffice/sdkjs");
 const vendorDir = path.join(rootDir, "vendor", "onlyoffice", "web-apps");
 
 // 解析版本号逻辑：9.3.0.67 -> version: 9.3.0, build: 67
-const versionParts = fullVersion ? fullVersion.split(".") : [];
+const versionParts = fullVersion.split(".");
 const buildNo = versionParts.pop() || "1";
 const productVersion = versionParts.join(".");
 

@@ -6,8 +6,6 @@ const rootDir = path.resolve(__dirname);
 const staticDirs = [
   { route: "/vendor", dir: path.join(rootDir, "vendor") },
   { route: "/wasm", dir: path.join(rootDir, "wasm") },
-  { route: "/sdkjs", dir: path.join(rootDir, "vendor", "onlyoffice", "sdkjs") },
-  { route: "/web-apps", dir: path.join(rootDir, "vendor", "onlyoffice", "web-apps") },
 ];
 
 const mimeTypes: Record<string, string> = {
@@ -103,7 +101,18 @@ function staticCopyPlugin() {
   };
 }
 
+const pkgPath = path.join(rootDir, "package.json");
+const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+const fullVersion = pkg.onlyoffice?.version || "9.3.0.1";
+const versionParts = fullVersion.split(".");
+const buildNo = versionParts.pop() || "1";
+const productVersion = versionParts.join(".");
+
 export default defineConfig({
+  define: {
+    __ONLYOFFICE_VERSION__: JSON.stringify(productVersion),
+    __ONLYOFFICE_BUILD_NUMBER__: parseInt(buildNo, 10),
+  },
   server: {
     port: 5173,
     host: true,

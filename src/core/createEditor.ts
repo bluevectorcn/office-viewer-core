@@ -62,7 +62,7 @@ function buildConfig(
         comment: true,
         modifyFilter: true,
         modifyContentControl: true,
-        chat: true
+        chat: false
       },
     },
     editorConfig: {
@@ -75,12 +75,26 @@ function buildConfig(
         },
         customization: {
           compactHeader: true,
-          forcesave: false,
-          uiTheme: "theme-classic-light",
+          spellcheck: false,
+          // logo: {
+          //     "image": "https://res.airrnd.com/disk/load/20260123/031605/dfvn5170hz4ikx.png",
+          //     "url": "https://www.baidu.com",
+          //     visible: true
+          // },
+          // customer: {
+          //   name: 'SuperPuper',
+          //   address: 'New-York, 125f-25',
+          //   mail: 'support@gmail.com',
+          //   www: 'www.superpuper.com',
+          //   phone: '1234567890',
+          //   info: 'Some info',
+          //   logo: '',
+          //   logoDark: '', // logo for dark theme
+          // },
         },
         coEditing: {
           mode: "fast",
-          change: true
+          change: false
         }
       },
     events: {

@@ -1,5 +1,8 @@
 import { getDocumentAssets } from "./assets";
 
+declare const __ONLYOFFICE_VERSION__: string;
+declare const __ONLYOFFICE_BUILD_NUMBER__: number;
+
 export type SocketListener = (...args: unknown[]) => void;
 
 type FakeSocketOptions = {
@@ -180,8 +183,8 @@ export class FakeSocket {
         type: 3,
         mode: 0,
         rights: 1,
-        buildVersion: "9.3.0",
-        buildNumber: 67,
+        buildVersion: __ONLYOFFICE_VERSION__,
+        buildNumber: __ONLYOFFICE_BUILD_NUMBER__,
         branding: true,
         customization: true,
       },
@@ -287,8 +290,8 @@ export class FakeSocket {
       indexUser,
       sessionTimeConnect: Date.now(),
       participants: [],
-      buildVersion: "9.3.0",
-      buildNumber: 67,
+      buildVersion: __ONLYOFFICE_VERSION__,
+      buildNumber: __ONLYOFFICE_BUILD_NUMBER__,
     });
 
     this.emitLocal("message", { type: "authChanges", changes: [] });

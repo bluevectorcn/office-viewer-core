@@ -221,7 +221,7 @@ export interface CustomizationConfig {
     toolbarNoTabs?: boolean;
     toolbarHideFileName?: boolean;
     // reviewDisplay: duplicate in review
-    // spellcheck: duplicate in features
+    spellcheck?: boolean;
     compatibleFeatures?: boolean;
     unit?: string;
     mentionShare?: boolean;
