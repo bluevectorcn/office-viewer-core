@@ -23,7 +23,9 @@ function installIframeIoPatch(targetWindow: Window) {
   marker[patchKey] = true;
   patchedWindows.add(targetWindow);
 
-  const proto = targetWindow.HTMLIFrameElement?.prototype;
+  const proto = (
+    targetWindow as typeof window & { HTMLIFrameElement?: typeof HTMLIFrameElement }
+  ).HTMLIFrameElement?.prototype;
   if (!proto) return;
 
   const srcDescriptor = Object.getOwnPropertyDescriptor(proto, "src");

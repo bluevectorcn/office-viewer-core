@@ -42,6 +42,7 @@ function buildConfig(
   docKey: string,
   onReady: () => void
 ): DocEditorConfig {
+  const lang = options?.lang ?? "zh";
   return {
     width: "100%",
     height: "100%",
@@ -66,7 +67,7 @@ function buildConfig(
     },
     editorConfig: {
         mode: "edit",
-        lang: "zh",
+        lang,
         user: {
           id: "1",
           name: "user",

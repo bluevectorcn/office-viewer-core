@@ -21,9 +21,33 @@ export interface ConvertedInput {
 const defaultDocxMime =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+const mimeToExtension: Record<string, string> = {
+  [defaultDocxMime]: "docx",
+  "application/msword": "doc",
+  "application/vnd.oasis.opendocument.text": "odt",
+  "text/plain": "txt",
+  "application/rtf": "rtf",
+  "application/x-rtf": "rtf",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.oasis.opendocument.spreadsheet": "ods",
+  "text/csv": "csv",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/vnd.ms-powerpoint": "ppt",
+  "application/vnd.oasis.opendocument.presentation": "odp",
+};
+
 function getExtension(name: string) {
   const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
   return match?.[1] ?? "docx";
+}
+
+function inferExtensionFromMime(mime: string) {
+  const normalized = mime.trim().toLowerCase();
+  if (!normalized || normalized === "application/octet-stream") {
+    return "docx";
+  }
+  return mimeToExtension[normalized] ?? null;
 }
 
 function inferDocumentType(ext: string): "word" | "cell" | "slide" | null {
@@ -65,8 +89,17 @@ export async function prepareInput(input: EditorInput): Promise<PreparedInput> {
   }
 
   if (input instanceof Blob) {
-    const file = new File([input], "document.docx", { type: input.type || defaultDocxMime });
-    return { file, title: "document.docx", fileType: "docx", documentType: "word" };
+    const fileType = inferExtensionFromMime(input.type);
+    if (!fileType) {
+      throw new Error(`Unsupported blob MIME type: ${input.type || "(empty)"}`);
+    }
+    const documentType = inferDocumentType(fileType);
+    if (!documentType) {
+      throw new Error(`Unsupported file type: ${fileType}`);
+    }
+    const title = `document.${fileType}`;
+    const file = new File([input], title, { type: input.type || defaultDocxMime });
+    return { file, title, fileType, documentType };
   }
 
   const bufferBlob = new Blob([input], { type: defaultDocxMime });
