@@ -8,7 +8,7 @@ import type {
 import { createId, createReadyLatch, revokeObjectUrl } from "./lifecycle";
 import { injectGlobals, exposeDocEditorConfig, injectIntoIframe } from "../bootstrap/inject";
 import { prepareInput, convertWithX2T } from "../input/openFile";
-import { exportWithX2T, initX2TModule } from "../export/x2t-export";
+import { exportWithX2T, initX2TModule } from "../x2t/service";
 import { registerDocumentAssets, clearDocumentAssets } from "../socket/assets";
 
 const DOCS_API_URL = "/vendor/onlyoffice/web-apps/apps/api/documents/api.js";
