@@ -26,7 +26,7 @@ onlyoffice-core/
 ├─ submodules/onlyoffice/web-apps/   # OnlyOffice web-apps source (git submodule)
 ├─ submodules/onlyoffice/sdkjs/      # OnlyOffice sdkjs source (git submodule)
 ├─ vendor/onlyoffice/web-apps/       # Built runtime assets served by iframe
-├─ wasm/x2t/                         # x2t.wasm + x2t.js (Emscripten glue)
+├─ vendor/onlyoffice/x2t/            # x2t.wasm + x2t.js (Emscripten glue)
 ├─ src/                              # Core API, bootstrap, fake socket, IO, demo
 ├─ scripts/build-onlyoffice.ts       # Submodule -> vendor build sync
 └─ ...
@@ -38,14 +38,49 @@ onlyoffice-core/
 interface OnlyOfficeEditor {
   open(input: File | Blob | ArrayBuffer | string): Promise<void>;
   save(): Promise<Blob>;
-  export(format: "pdf" | "docx"): Promise<Blob>;
+  export(format: "pdf" | "docx" | "xlsx" | "pptx"): Promise<Blob>;
   destroy(): void;
 }
 
 export function createEditor(
   container: HTMLElement,
-  options?: { lang?: string }
+  config: DocEditorConfig
 ): OnlyOfficeEditor;
+```
+
+### Assets Prefix (Deployment-Friendly)
+
+The component now loads both `api.js` and `x2t.js` from a configurable
+static assets prefix.
+
+- Default prefix: `/vendor/onlyoffice`
+- Config field: `assetsPrefix`
+
+Example:
+
+```ts
+import { createBaseConfig } from "./src/core/config";
+
+const config = createBaseConfig({
+  assetsPrefix: "/static/onlyoffice",
+});
+
+createEditor(container, config);
+```
+
+### Static Deployment Example (Nginx)
+
+Map your static files so that the chosen `assetsPrefix` points at
+`vendor/onlyoffice`:
+
+```nginx
+# assetsPrefix: /static/onlyoffice
+location /static/onlyoffice/ {
+  alias /path/to/onlyoffice-core/vendor/onlyoffice/;
+  add_header Cross-Origin-Opener-Policy same-origin;
+  add_header Cross-Origin-Embedder-Policy require-corp;
+  add_header Access-Control-Allow-Origin *;
+}
 ```
 
 ## Build OnlyOffice (Black Box)
@@ -85,4 +120,4 @@ pnpm build:onlyoffice
 
 - The iframe loads only `/vendor/onlyoffice/web-apps/apps/documenteditor/main/index.html`.
 - `window.io` is injected before the iframe loads; no socket.io-client dependency is used.
-- x2t init is wired through `import initX2T from "./x2t.js"` with `locateFile`.
+- x2t is loaded from `<assetsPrefix>/x2t/x2t.js` and `<assetsPrefix>/x2t/x2t.wasm`.

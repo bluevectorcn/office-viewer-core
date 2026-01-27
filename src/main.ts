@@ -1,4 +1,6 @@
 import { createEditor } from "./core/createEditor";
+import type { DocEditorConfig } from "./core/types";
+import { createBaseConfig } from "./core/config";
 
 const statusEl = document.getElementById("status");
 const fileInput = document.getElementById("file-input") as HTMLInputElement | null;
@@ -14,7 +16,38 @@ if (!editorHost) {
   throw new Error("Editor container not found");
 }
 
-const editor = createEditor(editorHost, { lang: "zh" });
+const baseConfig: DocEditorConfig = createBaseConfig({
+  document: {
+    permissions: {
+      edit: true,
+      print: true,
+      download: true,
+      fillForms: true,
+      review: true,
+      comment: true,
+      modifyFilter: false,
+      modifyContentControl: false,
+      chat: false,
+    },
+  },
+  editorConfig: {
+    lang: "zh",
+    customization: {
+      about: false,
+      comments: false,
+      features: {
+        spellcheck: false,
+      },
+      // layout: {
+      //   toolbar: false,
+      //   leftMenu: false,
+      //   rightMenu: false
+      // },
+    },
+  },
+});
+
+const editor = createEditor(editorHost, baseConfig);
 
 const DEMO_DOCX_BASE64 =
   "UEsDBBQAAAAIANJTOlzERlmv5gAAAKgBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBF9/kKy1uUOGWBEErSBYUlsCgfMLIniYVf8ril/D2TFoqEKEvrPo7nduuDd2KPmWwMvVw1rRQYdDQ2TL183T7Wt3I9VN32IyEJ9gbq5VxKulOK9IweqIkJAytjzB4KP/OkEug3mFBdt+2N0jEUDKUuS4ccKiG6DY6wc0U8HFg5oTM6kuL+5F1wvYSUnNVQWFf7YH6B6i9Iw8mjh2ab6IoNUl2CLOJlxk/0mRfJ1qB4gVyewLNRvcdslIl65znc/N/0x2/jOFqN5/zSlnLUSMRTe9ecFQ82fF/RqePwQ/UJUEsDBBQAAAAIANJTOlzXstcdqQAAAB4BAAALAAAAX3JlbHMvLnJlbHONjzsOwjAQRPucwtqebEKBEMJJg5DSonAAy944EfFHtvndHhcUBFFQ7uzMG82+fZiZ3SjEyVkOdVkBIyudmqzmcO6Pqy20TbE/0SxStsRx8pHljI0cxpT8DjHKkYyIpfNk82dwwYiUz6DRC3kRmnBdVRsMnwxoCsYWWNYpDqFTNbD+6ekfvBuGSdLByashm360fDkyWQRNicPdBYXqLZcZC5hX4mJmU7wAUEsDBBQAAAAIANJTOlywxaswuwAAAPwAAAARAAAAd29yZC9kb2N1bWVudC54bWw1jsFuwjAMhu99Cit3msJhmqo2CIG4IQ4b4pwlLlRq7CrJKH37JYVdfn3WL392s326AR7oQ8/UinVZCUAybHu6teLyfVx9CghRk9UDE7ZixiC2qmim2rL5dUgRkoFCPbXiHuNYSxnMHZ0OJY9IqevYOx3T6G9yYm9HzwZDSAfcIDdV9SGd7kmoAiBZf9jOGZdhfNHCXqWI6kzDfO663iBcd18n2LNHOKDjRuY6p3/vy7cgw0ub6f9tVfwBUEsBAhQDFAAAAAgA0lM6XMRGWa/mAAAAqAEAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACADSUzpc17LXHakAAAAeAQAACwAAAAAAAAAAAAAAgAEXAQAAX3JlbHMvLnJlbHNQSwECFAMUAAAACADSUzpcsMWrMLsAAAD8AAAAEQAAAAAAAAAAAAAAgAHpAQAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAMAAwC5AAAA0wIAAAAA";

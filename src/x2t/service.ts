@@ -1,4 +1,5 @@
 import type { ExportFormat } from "../core/types";
+import { resolveAssetPath } from "../core/assets";
 
 export interface X2TModule {
   instance?: WebAssembly.Instance;
@@ -28,7 +29,6 @@ export type MediaCollection = {
 };
 
 let initPromise: Promise<X2TModule> | null = null;
-const X2T_SCRIPT_URL = "/wasm/x2t/x2t.js";
 const X2T_SCRIPT_ID = "__oo-x2t-script";
 
 type X2TGlobalModule = X2TModule & {
@@ -114,11 +114,12 @@ export async function initX2TModule() {
         return;
       }
 
+      const scriptUrl = resolveAssetPath("/x2t/x2t.js");
       const moduleConfig: X2TGlobalModule = {
         ...existing,
         locateFile:
           existing.locateFile ??
-          ((file: string) => `/wasm/x2t/${file}`),
+          ((file: string) => resolveAssetPath(`/x2t/${file}`)),
         onRuntimeInitialized: () => resolve(moduleConfig),
       };
       win.Module = moduleConfig;
@@ -131,7 +132,7 @@ export async function initX2TModule() {
 
       const script = document.createElement("script");
       script.id = X2T_SCRIPT_ID;
-      script.src = X2T_SCRIPT_URL;
+      script.src = scriptUrl;
       script.async = true;
       script.onload = () => {
         const readyAfterLoad =

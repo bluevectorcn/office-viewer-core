@@ -12,10 +12,6 @@ export interface OnlyOfficeEditor {
   destroy(): void;
 }
 
-export interface CreateEditorOptions {
-  lang?: string;
-}
-
 export interface Permission {
     edit?: boolean;
     download?: boolean;
@@ -53,9 +49,9 @@ export interface DocumentInfo {
 }
 
 export interface DocumentConfig {
-    title: string;
-    url: string;
-    fileType: string;
+    title?: string;
+    url?: string;
+    fileType?: string;
     options?: any;
     key?: string;
     vkey?: string;
@@ -203,12 +199,12 @@ export interface CustomizationConfig {
         name?: string;
         size?: string;
     };
-    chat?: boolean;
+    // chat?: boolean;
     comments?: boolean;
     zoom?: number;
     compactToolbar?: boolean;
-    leftMenu?: boolean;
-    rightMenu?: boolean;
+    // leftMenu?: boolean;
+    // rightMenu?: boolean;
     hideRightMenu?: boolean;
     toolbar?: boolean;
     statusBar?: boolean;
@@ -221,7 +217,7 @@ export interface CustomizationConfig {
     toolbarNoTabs?: boolean;
     toolbarHideFileName?: boolean;
     // reviewDisplay: duplicate in review
-    spellcheck?: boolean;
+    // spellcheck?: boolean;
     compatibleFeatures?: boolean;
     unit?: string;
     mentionShare?: boolean;
@@ -335,6 +331,11 @@ export interface DocEditorConfig {
   width?: string;
   height?: string;
   documentType?: DocumentType;
+  /**
+   * Static assets prefix used by the component to load api.js and x2t.js.
+   * This field is stripped before passing the config to DocsAPI.
+   */
+  assetsPrefix?: string;
   token?: string;
   document?: DocumentConfig;
   editorConfig?: EditorConfig;

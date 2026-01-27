@@ -1,19 +1,13 @@
-import type {
-  CreateEditorOptions,
-  DocEditorConfig,
-  EditorInput,
-  ExportFormat,
-  OnlyOfficeEditor,
-} from "./types";
+import type { DocEditorConfig, EditorInput, ExportFormat, OnlyOfficeEditor } from "./types";
 import { createId, createReadyLatch, revokeObjectUrl } from "./lifecycle";
-import { injectGlobals, exposeDocEditorConfig, injectIntoIframe } from "../bootstrap/inject";
+import { injectGlobals, exposeDocEditorConfig } from "../bootstrap/inject";
 import { prepareInput, convertWithX2T } from "../input/openFile";
 import { exportWithX2T, initX2TModule } from "../x2t/service";
 import { registerDocumentAssets, clearDocumentAssets } from "../socket/assets";
-
-const DOCS_API_URL = "/vendor/onlyoffice/web-apps/apps/api/documents/api.js";
-
-let docsApiPromise: Promise<void> | null = null;
+import { loadDocsApi } from "./docsApi";
+import { observeEditorIframes } from "./iframeObserver";
+import { buildEditorConfig } from "./config";
+import { setAssetsPrefix } from "./assets";
 
 type DocEditorInstance = {
   destroyEditor?: () => void;
@@ -27,149 +21,16 @@ type PendingDownload = {
   timer: number;
 };
 
-function loadDocsApi() {
-  if (window.DocsAPI?.DocEditor) return Promise.resolve();
-  if (docsApiPromise) return docsApiPromise;
-
-  docsApiPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = DOCS_API_URL;
-    script.async = true;
-    script.onload = () => {
-      if (window.DocsAPI?.DocEditor) {
-        resolve();
-      } else {
-        reject(new Error("DocsAPI failed to initialize"));
-      }
-    };
-    script.onerror = () => reject(new Error("Failed to load DocsAPI"));
-    document.head.appendChild(script);
-  });
-
-  return docsApiPromise;
-}
-
-function buildConfig(
-  input: {
-    url: string;
-    fileType: string;
-    title: string;
-    documentType: "word" | "cell" | "slide";
-  },
-  options: CreateEditorOptions | undefined,
-  docKey: string,
-  onReady: () => void,
-  onDownloadAs: (event: unknown) => void
-): DocEditorConfig {
-  const lang = options?.lang ?? "zh";
-  return {
-    width: "100%",
-    height: "100%",
-    type: "desktop",
-    documentType: input.documentType,
-    document: {
-      url: input.url,
-      fileType: input.fileType,
-      title: input.title,
-      key: docKey,
-      permissions: {
-        edit: true,
-        print: true,
-        download: true,
-        fillForms: true,
-        review: true,
-        comment: true,
-        modifyFilter: true,
-        modifyContentControl: true,
-        chat: false
-      },
-    },
-    editorConfig: {
-        mode: "edit",
-        lang,
-        canCoAuthoring: false,
-        user: {
-          id: "1",
-          name: "user",
-          group: "user"
-        },
-        customization: {
-          compactHeader: true,
-          spellcheck: false,
-          // logo: {
-          //     "image": "https://res.airrnd.com/disk/load/20260123/031605/dfvn5170hz4ikx.png",
-          //     "url": "https://www.baidu.com",
-          //     visible: true
-          // },
-          // customer: {
-          //   name: 'SuperPuper',
-          //   address: 'New-York, 125f-25',
-          //   mail: 'support@gmail.com',
-          //   www: 'www.superpuper.com',
-          //   phone: '1234567890',
-          //   info: 'Some info',
-          //   logo: '',
-          //   logoDark: '', // logo for dark theme
-          // },
-        },
-        coEditing: {
-          mode: "strict",
-          change: false
-        }
-      },
-    events: {
-      onAppReady: onReady,
-      onDocumentReady: onReady,
-      onDownloadAs,
-      onError: (error) => {
-        console.error("OnlyOffice error", error);
-      },
-    },
-  };
-}
-
-function observeEditorIframes(container: HTMLElement) {
-  const seen = new WeakSet<HTMLIFrameElement>();
-
-  const handleFrame = (frame: HTMLIFrameElement) => {
-    if (seen.has(frame)) return;
-    seen.add(frame);
-    injectIntoIframe(frame);
-  };
-
-  const scanNode = (node: Node) => {
-    if (node instanceof HTMLIFrameElement) {
-      handleFrame(node);
-      return;
-    }
-    if (node instanceof HTMLElement) {
-      node.querySelectorAll("iframe").forEach(handleFrame);
-    }
-  };
-
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      record.addedNodes.forEach(scanNode);
-    }
-  });
-
-  observer.observe(container, { childList: true, subtree: true });
-  container.querySelectorAll("iframe").forEach(handleFrame);
-
-  return () => observer.disconnect();
-}
-
-export function createEditor(
-  container: HTMLElement,
-  options?: CreateEditorOptions
-): OnlyOfficeEditor {
+export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig): OnlyOfficeEditor {
   injectGlobals();
+  setAssetsPrefix(baseConfig.assetsPrefix);
 
   const host = document.createElement("div");
   host.className = "editor-host";
   const hostId = createId("oo-editor");
   host.id = hostId;
   container.appendChild(host);
+
   const stopObservingFrames = observeEditorIframes(document.documentElement || host);
 
   let editorInstance: DocEditorInstance | null = null;
@@ -259,6 +120,7 @@ export function createEditor(
 
   async function open(input: EditorInput) {
     injectGlobals();
+    setAssetsPrefix(baseConfig.assetsPrefix);
     await loadDocsApi();
     await initX2TModule();
 
@@ -270,11 +132,13 @@ export function createEditor(
     if (lastDocKey) {
       clearDocumentAssets(lastDocKey);
     }
+
     lastObjectUrl = resolved.objectUrl;
     lastSourceBlob = prepared.file;
     lastUrl = resolved.url;
     lastTitle = resolved.title;
     lastDocKey = createId("doc");
+
     const originUrl = URL.createObjectURL(prepared.file);
     lastImageUrls = Object.values(resolved.images);
     registerDocumentAssets(lastDocKey, {
@@ -291,9 +155,16 @@ export function createEditor(
     }
 
     const ready = createReadyLatch();
-    const config = buildConfig(resolved, options, lastDocKey, ready.resolve, handleDownloadAs);
-    exposeDocEditorConfig(config);
+    const config = buildEditorConfig(baseConfig, resolved, lastDocKey, {
+      onAppReady: ready.resolve,
+      onDocumentReady: ready.resolve,
+      onDownloadAs: handleDownloadAs,
+      onError: (error) => {
+        console.error("OnlyOffice error", error);
+      },
+    });
 
+    exposeDocEditorConfig(config);
     editorInstance = new window.DocsAPI!.DocEditor(hostId, config);
 
     await ready.promise;
@@ -354,6 +225,26 @@ export function createEditor(
     host.remove();
     stopObservingFrames();
   }
+
+  function shouldAutoOpen(url: unknown) {
+    if (typeof url !== "string") return false;
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+    if (trimmed === "data:," || trimmed.startsWith("data:,")) return false;
+    try {
+      const parsed = new URL(trimmed, window.location.href);
+      return parsed.protocol !== "data:";
+    } catch {
+      return false;
+    }
+  }
+
+  setTimeout(() => {
+    const url = baseConfig?.document?.url;
+    if (shouldAutoOpen(url)) {
+      void open(url as string);
+    }
+  }, 0);
 
   return {
     open,

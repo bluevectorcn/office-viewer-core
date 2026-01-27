@@ -5,7 +5,6 @@ import fs from "node:fs";
 const rootDir = path.resolve(__dirname);
 const staticDirs = [
   { route: "/vendor", dir: path.join(rootDir, "vendor") },
-  { route: "/wasm", dir: path.join(rootDir, "wasm") },
 ];
 
 const mimeTypes: Record<string, string> = {
