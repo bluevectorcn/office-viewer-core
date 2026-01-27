@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OnlyOffice WASM Core</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f1ea;
+        --ink: #1b1b1f;
+        --muted: #5b5b66;
+        --panel: #ffffff;
+        --line: #ded7cc;
+        --accent: #c05a2a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #fff7ed, var(--bg));
+      }
+
+      #app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+      }
+
+      header {
+        padding: 24px 32px 12px;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        padding: 0 32px 20px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 14px;
+      }
+
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #2b2b31;
+      }
+
+      button.ghost {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+      }
+
+      #status {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      #editor {
+        padding: 0 24px 24px;
+      }
+
+      #editor > .editor-host {
+        height: calc(100vh - 240px);
+        min-height: 480px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      @media (max-width: 720px) {
+        header {
+          padding: 20px 20px 10px;
+        }
+
+        .controls {
+          padding: 0 20px 16px;
+        }
+
+        #editor {
+          padding: 0 16px 24px;
+        }
+
+        #editor > .editor-host {
+          height: calc(100vh - 320px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>OnlyOffice WASM Core Kernel</header>
+      <section class="controls">
+        <div class="card">
+          <h3>Open</h3>
+          <button id="open-demo">Open Demo Docx</button>
+          <div class="row">
+            <input id="file-input" type="file" accept=".docx,.doc,.odt" />
+          </div>
+          <div class="row">
+            <input id="url-input" type="text" placeholder="https://example.com/file.docx" />
+            <button id="open-url" class="ghost">Open URL</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Export</h3>
+          <div class="row">
+            <button id="save">Save (Docx)</button>
+            <button id="export-pdf" class="secondary">Export PDF</button>
+            <button id="export-docx" class="ghost">Export Docx</button>
+          </div>
+          <div id="status">Idle</div>
+        </div>
+      </section>
+      <main id="editor"></main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
