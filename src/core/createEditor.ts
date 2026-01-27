@@ -3,6 +3,7 @@ import { createId, createReadyLatch, revokeObjectUrl } from "./lifecycle";
 import { injectGlobals, exposeDocEditorConfig } from "../bootstrap/inject";
 import { prepareInput, convertWithX2T } from "../input/openFile";
 import { exportWithX2T, initX2TModule } from "../x2t/service";
+import { emptyDocx, emptyPptx, emptyXlsx } from "../x2t/empty";
 import { registerDocumentAssets, clearDocumentAssets } from "../socket/assets";
 import { loadDocsApi } from "./docsApi";
 import { observeEditorIframes } from "./iframeObserver";
@@ -20,6 +21,14 @@ type PendingDownload = {
   reject: (error: unknown) => void;
   timer: number;
 };
+
+type InternalDownloadFlag = {
+  docId: string;
+  expiresAt: number;
+};
+
+const INTERNAL_DOWNLOAD_TTL_MS = 20_000;
+type NewFileFormat = "docx" | "xlsx" | "pptx";
 
 export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig): OnlyOfficeEditor {
   injectGlobals();
@@ -39,6 +48,7 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
   let lastUrl: string | null = null;
   let lastTitle = "document.docx";
   let lastDocKey: string | null = null;
+  let lastNativeFormat: ExportFormat = "docx";
   let lastImageUrls: string[] = [];
   let pendingDownload: PendingDownload | null = null;
 
@@ -47,11 +57,32 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
     lastImageUrls = [];
   };
 
+  function setInternalDownloadFlag(docId: string | null) {
+    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag };
+    if (!docId) {
+      delete win.__ooInternalDownload;
+      return;
+    }
+    win.__ooInternalDownload = {
+      docId,
+      expiresAt: Date.now() + INTERNAL_DOWNLOAD_TTL_MS,
+    };
+  }
+
+  function clearInternalDownloadFlag(docId?: string | null) {
+    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag };
+    const current = win.__ooInternalDownload;
+    if (!current) return;
+    if (docId && current.docId !== docId) return;
+    delete win.__ooInternalDownload;
+  }
+
   function clearPendingDownload(error?: unknown) {
     if (!pendingDownload) return;
     clearTimeout(pendingDownload.timer);
     const current = pendingDownload;
     pendingDownload = null;
+    clearInternalDownloadFlag(lastDocKey);
     if (error !== undefined) {
       current.reject(error);
     }
@@ -94,11 +125,44 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
       pendingDownload = null;
       if (current) {
         clearTimeout(current.timer);
+        clearInternalDownloadFlag(lastDocKey);
         current.resolve(blob);
       }
     } catch (error) {
       clearPendingDownload(error);
     }
+  }
+
+  function nativeFormatFromDocumentType(documentType: "word" | "cell" | "slide"): ExportFormat {
+    if (documentType === "cell") return "xlsx";
+    if (documentType === "slide") return "pptx";
+    return "docx";
+  }
+
+  function toBinaryBytes(data: string): Uint8Array {
+    const buffer = new ArrayBuffer(data.length);
+    const view = new Uint8Array(buffer);
+    for (let index = 0; index < data.length; index += 1) {
+      view[index] = data.charCodeAt(index);
+    }
+    return view;
+  }
+
+  function createEmptyFile(format: NewFileFormat): File {
+    const mimeByFormat: Record<NewFileFormat, string> = {
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    };
+    const templateByFormat: Record<NewFileFormat, string> = {
+      docx: emptyDocx,
+      xlsx: emptyXlsx,
+      pptx: emptyPptx,
+    };
+
+    const bytes = toBinaryBytes(templateByFormat[format]);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    return new File([buffer], `document.${format}`, { type: mimeByFormat[format] });
   }
 
   function requestDownload(format: ExportFormat) {
@@ -114,6 +178,7 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
       }, 15000);
 
       pendingDownload = { format, resolve, reject, timer };
+      setInternalDownloadFlag(lastDocKey);
       editorInstance.downloadAs(format);
     });
   }
@@ -138,6 +203,8 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
     lastUrl = resolved.url;
     lastTitle = resolved.title;
     lastDocKey = createId("doc");
+    lastNativeFormat = nativeFormatFromDocumentType(resolved.documentType);
+    clearInternalDownloadFlag();
 
     const originUrl = URL.createObjectURL(prepared.file);
     lastImageUrls = Object.values(resolved.images);
@@ -172,11 +239,11 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
 
   async function save() {
     try {
-      const downloaded = await requestDownload("docx");
+      const downloaded = await requestDownload(lastNativeFormat);
       lastSourceBlob = downloaded;
       return downloaded;
     } catch (error) {
-      console.warn("downloadAs(docx) failed, falling back to source blob", error);
+      console.warn(`downloadAs(${lastNativeFormat}) failed, falling back to source blob`, error);
     }
 
     if (lastSourceBlob) return lastSourceBlob;
@@ -194,7 +261,11 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
   }
 
   async function exportDoc(format: ExportFormat) {
-    if (format !== "docx") {
+    if (format === lastNativeFormat) {
+      return await save();
+    }
+
+    if (format !== lastNativeFormat) {
       try {
         const downloaded = await requestDownload(format);
         lastSourceBlob = downloaded;
@@ -206,6 +277,11 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
 
     const source = await save();
     return await exportWithX2T(source, format);
+  }
+
+  async function newFile(format: NewFileFormat) {
+    const file = createEmptyFile(format);
+    await open(file);
   }
 
   function destroy() {
@@ -221,6 +297,7 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
       clearDocumentAssets(lastDocKey);
     }
     lastDocKey = null;
+    clearInternalDownloadFlag();
     lastSourceBlob = null;
     host.remove();
     stopObservingFrames();
@@ -248,6 +325,7 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
 
   return {
     open,
+    newFile,
     save,
     export: exportDoc,
     destroy,

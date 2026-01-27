@@ -236,9 +236,9 @@ function buildParamsXml(fileFrom: string, fileTo: string) {
     `<m_sThemeDir>${WORKING_THEMES}</m_sThemeDir>`,
     `<m_sFileFrom>${fileFrom}</m_sFileFrom>`,
     `<m_sFileTo>${fileTo}</m_sFileTo>`,
-    "<m_bIsNoBase64>false</m_bIsNoBase64>",
-    "<m_nCsvTxtEncoding>46</m_nCsvTxtEncoding>",
+    "<m_nCsvTxtEncoding>65001</m_nCsvTxtEncoding>",
     "<m_nCsvDelimiter>4</m_nCsvDelimiter>",
+    "<m_sCsvDelimiterChar>,</m_sCsvDelimiterChar>",
     "</TaskQueueDataConvert>",
   ].join("");
 }

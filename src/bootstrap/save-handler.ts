@@ -25,6 +25,11 @@ export type SaveResponse = {
 
 const saveSessions = new Map<string, SaveSession>();
 
+type InternalDownloadFlag = {
+  docId: string;
+  expiresAt: number;
+};
+
 function debugLog(...args: unknown[]) {
   if (!DEBUG_LOCAL_SAVE) return;
   try {
@@ -206,6 +211,24 @@ function buildResponse(cmd: SaveCommand, data: unknown, fileType: string): SaveR
   };
 }
 
+function readInternalDownloadFlag(targetWindow: Window): InternalDownloadFlag | null {
+  try {
+    const parent = targetWindow.parent as Window & {
+      __ooInternalDownload?: InternalDownloadFlag;
+    };
+    return parent.__ooInternalDownload ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isInternalDownload(targetWindow: Window, docId: string) {
+  const flag = readInternalDownloadFlag(targetWindow);
+  if (!flag) return false;
+  if (!flag.docId || flag.docId !== docId) return false;
+  return flag.expiresAt > Date.now();
+}
+
 function triggerDownload(targetWindow: Window, url: string, filename: string) {
   try {
     const doc = targetWindow.document ?? document;
@@ -220,18 +243,18 @@ function triggerDownload(targetWindow: Window, url: string, filename: string) {
   }
 }
 
-function notifySaveComplete(docId: string, fileType: string) {
+function notifySaveComplete(docId: string, fileType: string, dataUrl: string) {
   const delivered = emitServerMessage(docId, {
     type: "documentOpen",
     data: {
       type: "save",
       status: "ok",
-      data: "data:,",
+      data: dataUrl,
       filetype: fileType,
       openedAt: Date.now(),
     },
   });
-  debugLog("notifySaveComplete", { docId, fileType, delivered });
+  debugLog("notifySaveComplete", { docId, fileType, delivered, dataUrl });
 }
 
 function resolveCommand(cmd: SaveCommand) {
@@ -293,8 +316,14 @@ function completeSave(
 ): SaveResponse {
   const url = URL.createObjectURL(blob);
   registerDownloadUrl(docId, url);
-  triggerDownload(targetWindow, url, title);
-  notifySaveComplete(docId, outputExt);
+  const internal = isInternalDownload(targetWindow, docId);
+  if (!internal) {
+    triggerDownload(targetWindow, url, title);
+  } else {
+    debugLog("skip auto download for internal request", { docId, title });
+  }
+  const saveDataUrl = internal ? url : "data:,";
+  notifySaveComplete(docId, outputExt, saveDataUrl);
   const response = buildResponse(cmd, url, outputExt);
   debugLog(debugLabel, {
     docId,
@@ -476,4 +505,3 @@ export async function handleSaveLikeRequest(
   }
   return await handleSaveCommand(targetWindow, cmd, body);
 }
-

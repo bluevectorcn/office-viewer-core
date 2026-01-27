@@ -7,6 +7,7 @@ export type Group = string;
 
 export interface OnlyOfficeEditor {
   open(input: EditorInput): Promise<void>;
+  newFile(format: "docx" | "xlsx" | "pptx"): Promise<void>;
   save(): Promise<Blob>;
   export(format: ExportFormat): Promise<Blob>;
   destroy(): void;
