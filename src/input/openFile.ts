@@ -5,14 +5,14 @@ export interface PreparedInput {
   file: File;
   title: string;
   fileType: string;
-  documentType: "word" | "cell" | "slide";
+  documentType: "word" | "cell" | "slide" | "pdf";
 }
 
 export interface ConvertedInput {
   url: string;
   title: string;
   fileType: string;
-  documentType: "word" | "cell" | "slide";
+  documentType: "word" | "cell" | "slide" | "pdf";
   blob: Blob;
   objectUrl: string;
   images: Record<string, string>;
@@ -51,11 +51,12 @@ function inferExtensionFromMime(mime: string) {
   return mimeToExtension[normalized] ?? null;
 }
 
-function inferDocumentType(ext: string): "word" | "cell" | "slide" | null {
+function inferDocumentType(ext: string): "word" | "cell" | "slide" | "pdf" | null {
   const normalized = ext.toLowerCase();
   if (["docx", "doc", "odt", "txt", "rtf"].includes(normalized)) return "word";
   if (["xlsx", "xls", "ods", "csv"].includes(normalized)) return "cell";
   if (["pptx", "ppt", "odp"].includes(normalized)) return "slide";
+  if (["pdf"].includes(normalized)) return "pdf";
   return null;
 }
 
