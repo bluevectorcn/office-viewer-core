@@ -10,7 +10,11 @@
     "allowJs": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["src", "scripts", "wasm", "vite.config.ts"]
 }
