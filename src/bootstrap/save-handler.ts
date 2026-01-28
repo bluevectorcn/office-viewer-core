@@ -3,6 +3,8 @@ import { createId } from "../core/lifecycle";
 import type { ExportFormat } from "../core/types";
 import { exportWithX2T, initX2TModule } from "../x2t/service";
 import { getDocumentAssets, registerDownloadUrl } from "../socket/assets";
+import { ChunkedUploader } from "@/infrastructure/network/ChunkedUploader";
+import { Logger } from "@/shared/logging/Logger";
 
 const DEBUG_LOCAL_SAVE = Boolean((import.meta as any)?.env?.VITE_OO_DEBUG_LOCAL_SAVE);
 const SAVE_ENDPOINT_RE = /\/(downloadas|savefile)\//i;
@@ -23,7 +25,12 @@ export type SaveResponse = {
   filetype: string;
 };
 
-const saveSessions = new Map<string, SaveSession>();
+// 使用 ChunkedUploader 替代全局 Map，防止内存泄漏
+const logger = new Logger({ prefix: '[SaveHandler]' });
+const chunkedUploader = new ChunkedUploader(logger);
+
+// 保留旧的 Map 用于存储会话元数据（不包含 chunks）
+const sessionMetadata = new Map<string, Omit<SaveSession, 'chunks'>>();
 
 type InternalDownloadFlag = {
   docId: string;
@@ -457,30 +464,39 @@ async function handleSaveCommand(
 
   if (savetype === saveTypes.first) {
     const savekey = createId("savekey");
-    saveSessions.set(savekey, {
+    // 使用 ChunkedUploader 处理第一个分块
+    await chunkedUploader.handleChunk(savekey, bytes, 'first');
+    // 保存会话元数据（不包含 chunks）
+    sessionMetadata.set(savekey, {
       docId,
       savekey,
       cmd,
-      chunks: [bytes],
     });
     return buildResponse(cmd, savekey, outputExt);
   }
 
   const incomingKey = typeof cmd.savekey === "string" ? cmd.savekey : "";
-  const session = incomingKey ? saveSessions.get(incomingKey) : undefined;
+  const session = incomingKey ? sessionMetadata.get(incomingKey) : undefined;
   if (!session) {
     return buildResponse(cmd, createId("savekey-missing"), outputExt);
   }
 
-  session.chunks.push(bytes);
-
   if (savetype === saveTypes.middle) {
+    // 使用 ChunkedUploader 处理中间分块
+    await chunkedUploader.handleChunk(session.savekey, bytes, 'middle');
     return buildResponse(cmd, session.savekey, outputExt);
   }
 
-  const allBytes = concatChunks(session.chunks);
-  saveSessions.delete(session.savekey);
-  return await finalizeSave(targetWindow, session.docId, session.cmd, allBytes);
+  // 处理最后一个分块，获取合并后的数据
+  const result = await chunkedUploader.handleChunk(session.savekey, bytes, 'last');
+  sessionMetadata.delete(session.savekey);
+
+  if (result.status === 'error' || !result.data) {
+    logger.error('Failed to finalize chunked upload', result.message);
+    return buildResponse(cmd, createId("savekey-error"), outputExt);
+  }
+
+  return await finalizeSave(targetWindow, session.docId, session.cmd, result.data);
 }
 
 export async function handleSaveLikeRequest(

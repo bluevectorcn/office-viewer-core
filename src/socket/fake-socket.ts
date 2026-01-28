@@ -1,4 +1,5 @@
 import { getDocumentAssets } from "./assets";
+import { SocketRegistry } from "@/infrastructure/socket/SocketRegistry";
 
 declare const __ONLYOFFICE_VERSION__: string;
 declare const __ONLYOFFICE_BUILD_NUMBER__: number;
@@ -108,7 +109,8 @@ class FakeSocketManager {
   }
 }
 
-const socketRegistry = new Set<FakeSocket>();
+// 使用 WeakRef 注册表替代强引用 Set，防止内存泄漏
+const socketRegistry = new SocketRegistry();
 
 export class FakeSocket {
   connected = false;
@@ -125,7 +127,8 @@ export class FakeSocket {
   constructor(options?: FakeSocketOptions) {
     this.io = new FakeSocketManager(options);
     this.auth = options?.auth;
-    socketRegistry.add(this);
+    // 注册到 WeakRef 注册表，使用临时 docId
+    socketRegistry.register(`temp-${Date.now()}`, this);
     queueMicrotask(() => this.connect());
   }
 
@@ -199,7 +202,7 @@ export class FakeSocket {
     if (!this.connected) return this;
     this.connected = false;
     this.emitLocal("disconnect", reason);
-    socketRegistry.delete(this);
+    // WeakRef 注册表会自动清理，无需手动删除
     return this;
   }
 
@@ -463,14 +466,8 @@ export class FakeSocket {
 }
 
 export function emitServerMessage(docId: string, message: unknown) {
-  let delivered = false;
-  for (const socket of socketRegistry) {
-    if (!socket.connected) continue;
-    if (!socket.matchesDocId(docId)) continue;
-    socket.emitServerMessage(message);
-    delivered = true;
-  }
-  return delivered;
+  // 使用新的 SocketRegistry.emitToDocument 方法
+  return socketRegistry.emitToDocument(docId, message);
 }
 
 function normalizeImagePath(name: string) {

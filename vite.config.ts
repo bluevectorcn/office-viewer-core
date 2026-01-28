@@ -127,4 +127,9 @@ export default defineConfig({
     },
   },
   plugins: [staticCopyPlugin()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  }
 });
