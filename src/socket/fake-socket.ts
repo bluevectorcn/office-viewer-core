@@ -290,6 +290,21 @@ export class FakeSocket {
       if (typeof format === "string") {
         this.openCmd.format = format.toLowerCase();
       }
+
+      // 修复：使用真实的文档 ID 重新注册到 SocketRegistry
+      // 这样 save-handler 等地方可以通过 docId 找到 socket
+      if (cmd.id) {
+        socketRegistry.register(cmd.id, this);
+      }
+      if (cmd.key && cmd.key !== cmd.id) {
+        socketRegistry.register(cmd.key, this);
+      }
+      if (cmd.docId && cmd.docId !== cmd.id && cmd.docId !== cmd.key) {
+        socketRegistry.register(cmd.docId, this);
+      }
+      if (cmd.url && cmd.url !== cmd.id && cmd.url !== cmd.key && cmd.url !== cmd.docId) {
+        socketRegistry.register(cmd.url, this);
+      }
     }
 
     const user = message.user;
