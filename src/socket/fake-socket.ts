@@ -1,5 +1,7 @@
 import { getDocumentAssets } from "./assets";
 import { SocketRegistry } from "@/infrastructure/socket/SocketRegistry";
+import { AsyncLock } from "@/shared/concurrency/AsyncLock";
+import { ImagePathNormalizer } from "@/shared/utils/ImagePathNormalizer";
 
 declare const __ONLYOFFICE_VERSION__: string;
 declare const __ONLYOFFICE_BUILD_NUMBER__: number;
@@ -123,6 +125,7 @@ export class FakeSocket {
   private openCmd?: { url?: string; format?: string; id?: string; key?: string; docId?: string };
   private sessionId = `local-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
   private userId = "local-user";
+  private lockManager = new AsyncLock();
 
   constructor(options?: FakeSocketOptions) {
     this.io = new FakeSocketManager(options);
@@ -260,8 +263,9 @@ export class FakeSocket {
         this.handleImageUrls(message);
         break;
       case "getLock":
-        this.handleGetLock(message);
-        this.releaseLocks();
+        // 修复：使用 AsyncLock 保护锁操作的原子性
+        // 在 WASM 模式下 unLockDocument 不会执行，所以必须立即释放
+        this.handleGetLockAndRelease(message);
         break;
       case "unLockDocument":
         this.releaseLocks();
@@ -329,21 +333,14 @@ export class FakeSocket {
       "Editor.bin": this.openCmd.url,
     };
     urls[`origin.${format}`] = this.openCmd.url;
+
+    // 修复：使用 ImagePathNormalizer 统一路径格式，避免一张图片生成多个键
     const assets = this.getAssets();
     if (assets?.images) {
       for (const [name, url] of Object.entries(assets.images)) {
-        const normalized = normalizeImagePath(name);
-        urls[normalized] = url;
-        if (name !== normalized) {
-          urls[name] = url;
-        }
-        const withoutMedia = normalized.startsWith("media/") ? normalized.slice("media/".length) : normalized;
-        urls[withoutMedia] = url;
-        if (!normalized.startsWith("media/")) {
-          urls[`media/${normalized}`] = url;
-        } else {
-          urls[`media/${withoutMedia}`] = url;
-        }
+        // 统一标准化为 media/xxx.png 格式
+        const standardPath = ImagePathNormalizer.normalize(name);
+        urls[standardPath] = url;
       }
     }
 
@@ -409,6 +406,22 @@ export class FakeSocket {
       return getDocumentAssets(this.openCmd.url);
     }
     return undefined;
+  }
+
+  /**
+   * 处理获取锁请求并立即释放
+   *
+   * 在 WASM 模式下 unLockDocument 不会执行，所以必须在发送消息后立即释放锁。
+   * 使用 AsyncLock 确保 handleGetLock + releaseLocks 作为原子操作执行，避免竞态条件。
+   */
+  private async handleGetLockAndRelease(message: Record<string, unknown>) {
+    await this.lockManager.runExclusive(async () => {
+      // 1. 处理获取锁
+      this.handleGetLock(message);
+
+      // 2. 立即释放锁（WASM 模式要求）
+      this.releaseLocks();
+    });
   }
 
   private handleGetLock(message: Record<string, unknown>) {
