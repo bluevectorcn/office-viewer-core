@@ -133,9 +133,10 @@ export function createEditor(container: HTMLElement, baseConfig: DocEditorConfig
     }
   }
 
-  function nativeFormatFromDocumentType(documentType: "word" | "cell" | "slide"): ExportFormat {
+  function nativeFormatFromDocumentType(documentType: "word" | "cell" | "slide" | "pdf"): ExportFormat {
     if (documentType === "cell") return "xlsx";
     if (documentType === "slide") return "pptx";
+    if (documentType === "pdf") return "pdf";
     return "docx";
   }
 
