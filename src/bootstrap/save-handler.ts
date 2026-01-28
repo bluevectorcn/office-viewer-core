@@ -1,6 +1,6 @@
 import { emitServerMessage } from "../socket/fake-socket";
 import { createId } from "../core/lifecycle";
-import type { ExportFormat } from "../core/types";
+import { type ExportFormat, getFileExtensionByType } from "../core/types";
 import { exportWithX2T, initX2TModule } from "../x2t/service";
 import { getDocumentAssets, registerDownloadUrl } from "../socket/assets";
 import { ChunkedUploader } from "@/infrastructure/network/ChunkedUploader";
@@ -103,13 +103,10 @@ function resolveOutputExtension(
   cmd: SaveCommand,
   assets: ReturnType<typeof getDocumentAssets> | undefined
 ) {
-  const ugI = (targetWindow as typeof window & { AscCommon?: { UGi?: (value: unknown) => string } })
-    .AscCommon?.UGi;
-
   const numericCandidates = [cmd.outputformat, cmd.outputtype, cmd.filetype, cmd.fileType];
   for (const candidate of numericCandidates) {
-    if (typeof candidate === "number" && ugI) {
-      const ext = ugI(candidate);
+    if (typeof candidate === "number") {
+      const ext = getFileExtensionByType(candidate);
       if (ext) return ext.toLowerCase();
     }
   }
@@ -120,12 +117,11 @@ function resolveOutputExtension(
     cmd.filetype,
     cmd.fileType,
     cmd.format,
-    cmd.fileType,
   ];
   for (const candidate of stringCandidates) {
     if (typeof candidate === "string" && candidate) {
-      if (ugI && /^\d+$/.test(candidate)) {
-        const extFromCode = ugI(Number(candidate));
+      if (/^\d+$/.test(candidate)) {
+        const extFromCode = getFileExtensionByType(Number(candidate));
         if (extFromCode) return extFromCode.toLowerCase();
       }
       const ext = candidate.toLowerCase().replace(/^\./, "");
@@ -198,13 +194,11 @@ function looksLikeZip(bytes: Uint8Array) {
 }
 
 function getSavetypeConstants(targetWindow: Window) {
-  const atd = (targetWindow as typeof window & { AscCommon?: { atd?: Record<string, number> } })
-    .AscCommon?.atd;
   return {
-    first: atd?.Nkh ?? 0,
-    middle: atd?.Mkh ?? 1,
-    last: atd?.Ika ?? 2,
-    single: atd?.EVg ?? 3,
+    first: 0,
+    middle: 1,
+    last: 2,
+    single: 3,
   };
 }
 
