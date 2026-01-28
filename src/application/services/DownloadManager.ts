@@ -287,7 +287,7 @@ export class DownloadManager implements DownloadRequester {
     this.clearInternalDownloadFlag(this.currentDocId);
 
     if (error !== undefined) {
-      this.logger.warn('Download request cleared', error);
+      this.logger.warn('Download request cleared', error instanceof Error ? { error: error.message, stack: error.stack } : { error });
       current.reject(error);
     }
   }
@@ -296,9 +296,9 @@ export class DownloadManager implements DownloadRequester {
    * 设置内部下载标志
    */
   private setInternalDownloadFlag(docId: string | null): void {
-    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag };
+    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag | null };
     if (!docId) {
-      delete win.__ooInternalDownload;
+      win.__ooInternalDownload = null;
       return;
     }
     win.__ooInternalDownload = {
@@ -311,18 +311,18 @@ export class DownloadManager implements DownloadRequester {
    * 清除内部下载标志
    */
   private clearInternalDownloadFlag(docId?: string | null): void {
-    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag };
+    const win = window as Window & { __ooInternalDownload?: InternalDownloadFlag | null };
     const current = win.__ooInternalDownload;
     if (!current) return;
     if (docId !== undefined && docId !== null && current.docId !== docId) return;
-    delete win.__ooInternalDownload;
+    win.__ooInternalDownload = null;
   }
 
   /**
    * 根据格式获取正确的 MIME type
    */
   private getMimeTypeForFormat(format: ExportFormat): string {
-    const mimeTypes: Record<ExportFormat, string> = {
+    const mimeTypes: Record<string, string> = {
       docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',

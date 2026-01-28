@@ -96,7 +96,7 @@ export class ExportDocumentUseCase {
       } catch (downloadError) {
         this.logger.warn(
           `downloadAs(${format}) failed, falling back to X2T export`,
-          downloadError
+          downloadError instanceof Error ? { error: downloadError.message, stack: downloadError.stack } : { error: downloadError }
         );
 
         // 策略 3: 回退到 X2T 转换

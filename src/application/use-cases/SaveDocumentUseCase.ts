@@ -74,7 +74,7 @@ export class SaveDocumentUseCase {
     } catch (downloadError) {
       this.logger.warn(
         `downloadAs(${session.nativeFormat}) failed, falling back to source blob`,
-        downloadError
+        downloadError instanceof Error ? { error: downloadError.message, stack: downloadError.stack } : { error: downloadError }
       );
 
       // 策略 2: 使用上次保存的源 Blob
@@ -96,7 +96,7 @@ export class SaveDocumentUseCase {
           });
           return blob;
         } catch (fetchError) {
-          this.logger.warn('Failed to fetch from original URL', fetchError);
+          this.logger.warn('Failed to fetch from original URL', fetchError instanceof Error ? { error: fetchError.message, stack: fetchError.stack } : { error: fetchError });
         }
       }
 
