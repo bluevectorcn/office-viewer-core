@@ -5,7 +5,7 @@ export type Mode = 'view' | 'edit';
 export type ToolbarDocked = 'top' | 'bottom';
 export type Group = string;
 
-export interface OnlyOfficeEditor {
+export interface IEditor {
   open(input: EditorInput): Promise<void>;
   newFile(format: "docx" | "xlsx" | "pptx"): Promise<void>;
   save(): Promise<Blob>;
@@ -648,6 +648,149 @@ export function getFileExtensionByType(type: number | AvsFileType): string {
 
     default:
       return "";
+  }
+}
+
+export function getAvsFileTypeByExtension(extension: string): AvsFileType {
+  const normalized = extension.toLowerCase().replace(/^\./, "");
+  switch (normalized) {
+    case "docx":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOCX;
+    case "doc":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOC;
+    case "odt":
+      return AvsFileType.AVS_FILE_DOCUMENT_ODT;
+    case "rtf":
+      return AvsFileType.AVS_FILE_DOCUMENT_RTF;
+    case "txt":
+      return AvsFileType.AVS_FILE_DOCUMENT_TXT;
+    case "html":
+      return AvsFileType.AVS_FILE_DOCUMENT_HTML;
+    case "mht":
+      return AvsFileType.AVS_FILE_DOCUMENT_MHT;
+    case "epub":
+      return AvsFileType.AVS_FILE_DOCUMENT_EPUB;
+    case "fb2":
+      return AvsFileType.AVS_FILE_DOCUMENT_FB2;
+    case "mobi":
+      return AvsFileType.AVS_FILE_DOCUMENT_MOBI;
+    case "docm":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOCM;
+    case "dotx":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOTX;
+    case "dotm":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOTM;
+    case "ott":
+      return AvsFileType.AVS_FILE_DOCUMENT_OTT;
+    case "oform":
+      return AvsFileType.AVS_FILE_DOCUMENT_OFORM;
+    case "docxf":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOCXF;
+
+    case "pptx":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPTX;
+    case "ppt":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPT;
+    case "odp":
+      return AvsFileType.AVS_FILE_PRESENTATION_ODP;
+    case "ppsx":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPSX;
+    case "pptm":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPTM;
+    case "ppsm":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPSM;
+    case "potx":
+      return AvsFileType.AVS_FILE_PRESENTATION_POTX;
+    case "potm":
+      return AvsFileType.AVS_FILE_PRESENTATION_POTM;
+    case "otp":
+      return AvsFileType.AVS_FILE_PRESENTATION_OTP;
+    case "odg":
+      return AvsFileType.AVS_FILE_PRESENTATION_ODG;
+
+    case "xlsx":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLSX;
+    case "xls":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLS;
+    case "ods":
+      return AvsFileType.AVS_FILE_SPREADSHEET_ODS;
+    case "csv":
+      return AvsFileType.AVS_FILE_SPREADSHEET_CSV;
+    case "xlsm":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLSM;
+    case "xltx":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLTX;
+    case "xltm":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLTM;
+    case "xlsb":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLSB;
+    case "ots":
+      return AvsFileType.AVS_FILE_SPREADSHEET_OTS;
+
+    case "pdf":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_PDF;
+    case "swf":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_SWF;
+    case "djvu":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_DJVU;
+    case "xps":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_XPS;
+    case "svg":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_SVG;
+
+    case "jpg":
+    case "jpeg":
+      return AvsFileType.AVS_FILE_IMAGE_JPG;
+    case "tiff":
+      return AvsFileType.AVS_FILE_IMAGE_TIFF;
+    case "tga":
+      return AvsFileType.AVS_FILE_IMAGE_TGA;
+    case "gif":
+      return AvsFileType.AVS_FILE_IMAGE_GIF;
+    case "png":
+      return AvsFileType.AVS_FILE_IMAGE_PNG;
+    case "emf":
+      return AvsFileType.AVS_FILE_IMAGE_EMF;
+    case "wmf":
+      return AvsFileType.AVS_FILE_IMAGE_WMF;
+    case "bmp":
+      return AvsFileType.AVS_FILE_IMAGE_BMP;
+    case "cr2":
+      return AvsFileType.AVS_FILE_IMAGE_CR2;
+    case "pcx":
+      return AvsFileType.AVS_FILE_IMAGE_PCX;
+    case "ras":
+      return AvsFileType.AVS_FILE_IMAGE_RAS;
+    case "psd":
+      return AvsFileType.AVS_FILE_IMAGE_PSD;
+    case "ico":
+      return AvsFileType.AVS_FILE_IMAGE_ICO;
+
+    case "json":
+      return AvsFileType.AVS_FILE_OTHER_JSON;
+
+    case "docy":
+      return AvsFileType.AVS_FILE_TEAMLAB_DOCY;
+    case "xlsy":
+      return AvsFileType.AVS_FILE_TEAMLAB_XLSY;
+    case "ppty":
+      return AvsFileType.AVS_FILE_TEAMLAB_PPTY;
+
+    case "vsdx":
+      return AvsFileType.AVS_FILE_DRAW_VSDX;
+    case "vssx":
+      return AvsFileType.AVS_FILE_DRAW_VSSX;
+    case "vstx":
+      return AvsFileType.AVS_FILE_DRAW_VSTX;
+    case "vsdm":
+      return AvsFileType.AVS_FILE_DRAW_VSDM;
+    case "vssm":
+      return AvsFileType.AVS_FILE_DRAW_VSSM;
+    case "vstm":
+      return AvsFileType.AVS_FILE_DRAW_VSTM;
+
+    default:
+      return AvsFileType.AVS_FILE_UNKNOWN;
   }
 }
 

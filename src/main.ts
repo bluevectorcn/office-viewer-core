@@ -1,6 +1,6 @@
-import { createEditor } from "./core/createEditor";
-import type { DocEditorConfig } from "./core/types";
-import { createBaseConfig } from "./core/config";
+import { createEditor } from "./application/EditorFactory";
+import type { DocEditorConfig } from "./shared/types/EditorTypes";
+import { createBaseConfig } from "./application/config/EditorConfigBuilder";
 
 const statusEl = document.getElementById("status");
 const fileInput = document.getElementById("file-input") as HTMLInputElement | null;

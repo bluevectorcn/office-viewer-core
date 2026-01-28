@@ -1,5 +1,5 @@
 import type { AssetsRegistry } from '../use-cases/OpenDocumentUseCase';
-import { registerDocumentAssets as legacyRegisterAssets } from '../../socket/assets';
+import { registerDocumentAssets as legacyRegisterAssets } from '../../infrastructure/socket/AssetsStore';
 
 /**
  * 资产注册器适配器

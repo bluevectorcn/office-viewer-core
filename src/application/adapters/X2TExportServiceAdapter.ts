@@ -1,6 +1,6 @@
-import type { ExportFormat } from '../../core/types';
+import type { ExportFormat } from '../../shared/types/EditorTypes';
 import type { X2TExportService } from '../use-cases/ExportDocumentUseCase';
-import { exportWithX2T as legacyExportWithX2T } from '../../x2t/service';
+import { exportWithX2T as legacyExportWithX2T } from '../../infrastructure/conversion/X2TService';
 
 /**
  * X2T 导出服务适配器

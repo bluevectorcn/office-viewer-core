@@ -1,5 +1,5 @@
-import type { EditorInput } from "../core/types";
-import { convertToEditorBin } from "../x2t/service";
+import type { EditorInput } from "../../shared/types/EditorTypes";
+import { convertToEditorBin } from "../../infrastructure/conversion/X2TService";
 
 export interface PreparedInput {
   file: File;

@@ -1,6 +1,6 @@
-import { FakeSocket } from "../socket/fake-socket";
-import type { DocEditorConfig } from "../core/types";
-import { installLocalEndpointPatch } from "./network-patch";
+import { FakeSocket } from "../../infrastructure/socket/FakeSocket";
+import type { DocEditorConfig } from "../../shared/types/EditorTypes";
+import { installLocalEndpointPatch } from "../../infrastructure/network/NetworkPatch";
 
 const injectedWindows = new WeakSet<Window>();
 const patchedWindows = new WeakSet<Window>();

@@ -1,4 +1,4 @@
-import { resolveAssetPath } from "./assets";
+import { resolveAssetPath } from "../socket/AssetsPrefix";
 
 let docsApiPromise: Promise<void> | null = null;
 

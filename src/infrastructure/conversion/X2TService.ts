@@ -1,5 +1,6 @@
-import type { ExportFormat } from "../core/types";
-import { resolveAssetPath } from "../core/assets";
+import type { ExportFormat } from "../../shared/types/EditorTypes";
+import { AvsFileType } from "../../shared/types/EditorTypes";
+import { resolveAssetPath } from "../socket/AssetsPrefix";
 
 export interface X2TModule {
   instance?: WebAssembly.Instance;
@@ -90,7 +91,7 @@ const mimeByFormat: Record<ExportFormat, string> = {
 
 const WORKING_ROOT = "/working";
 const WORKING_MEDIA = "/working/media";
-const WORKING_FONTS = "/working/fonts/";
+const WORKING_FONTS = "/working/fonts";
 const WORKING_THEMES = "/working/themes";
 const PARAMS_PATH = "/working/params.xml";
 const EDITOR_BIN_PATH = "/working/Editor.bin";
@@ -231,15 +232,13 @@ function prepareWorkingDir(FS: X2TFS) {
 }
 
 type ParamsXmlOptions = {
-  formatFrom?: number | null;
-  formatTo?: number | null;
+  formatFrom: AvsFileType;
+  formatTo: AvsFileType;
 };
 
 function buildParamsXml(fileFrom: string, fileTo: string, options?: ParamsXmlOptions) {
-  const formatFrom =
-    typeof options?.formatFrom === "number" ? `<m_nFormatFrom>${options.formatFrom}</m_nFormatFrom>` : "";
-  const formatTo =
-    typeof options?.formatTo === "number" ? `<m_nFormatTo>${options.formatTo}</m_nFormatTo>` : "";
+  const formatFrom = options?.formatFrom ? `<m_nFormatFrom>${options?.formatFrom}</m_nFormatFrom>` : "";
+  const formatTo = options?.formatTo ? `<m_nFormatTo>${options?.formatTo}</m_nFormatTo>` : "";
 
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
@@ -358,44 +357,6 @@ function getRuntime(module: X2TModule): X2TRuntime {
   return module as X2TRuntime;
 }
 
-const wordExts = new Set(["docx", "doc", "odt", "txt", "rtf"]);
-const cellExts = new Set(["xlsx", "xls", "ods", "csv"]);
-const slideExts = new Set(["pptx", "ppt", "odp"]);
-
-type CanvasKey = "CANVAS_WORD" | "CANVAS_SPREADSHEET" | "CANVAS_PRESENTATION";
-
-function getCanvasKeyFromExt(ext: string): CanvasKey {
-  const normalized = ext.toLowerCase();
-  if (cellExts.has(normalized)) return "CANVAS_SPREADSHEET";
-  if (slideExts.has(normalized)) return "CANVAS_PRESENTATION";
-  return "CANVAS_WORD";
-}
-
-function getAscFileTypeMap(): Record<string, number> | null {
-  try {
-    const asc = (window as typeof window & { Asc?: { c_oAscFileType?: Record<string, number> } }).Asc;
-    return asc?.c_oAscFileType ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function getAscFileTypeCode(key: string): number | null {
-  const map = getAscFileTypeMap();
-  if (!map) return null;
-  const value = map[key];
-  return typeof value === "number" ? value : null;
-}
-
-function getFormatFromExt(ext: string): number | null {
-  const key = ext.toUpperCase();
-  return getAscFileTypeCode(key);
-}
-
-function getFormatToCanvas(ext: string): number | null {
-  const canvasKey = getCanvasKeyFromExt(ext);
-  return getAscFileTypeCode(canvasKey);
-}
 
 export async function convertToEditorBin(input: File, title: string) {
   const module = await initX2TModule();
@@ -411,8 +372,8 @@ export async function convertToEditorBin(input: File, title: string) {
   // Some legacy formats (notably .doc) appear sensitive to complex filenames.
   const workingSourceName = sourceExt === "doc" ? "doc.doc" : `document.${sourceExt}`;
   const sourcePath = `${WORKING_ROOT}/${workingSourceName}`;
-  const formatFrom = getFormatFromExt(sourceExt);
-  const formatToCanvas = getFormatToCanvas(sourceExt);
+  // const formatFrom = getAvsFileTypeByExtension(sourceExt);
+  // const formatToCanvas = getAvsFileTypeByExtension(sourceExt);
   const arrayBuffer = await input.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
   FS.writeFile(sourcePath, bytes);
@@ -452,10 +413,7 @@ export async function convertToEditorBin(input: File, title: string) {
       });
     }
   } else {
-    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH, {
-      formatFrom,
-      formatTo: formatToCanvas,
-    });
+    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH);
     FS.writeFile(PARAMS_PATH, paramsXml);
     if (sourceExt === "csv") {
       const code = runX2TCode(runtime, PARAMS_PATH);

@@ -1,4 +1,4 @@
-import { getDocumentAssets } from "./assets";
+import { getDocumentAssets } from "./AssetsStore";
 import { SocketRegistry } from "@/infrastructure/socket/SocketRegistry";
 import { AsyncLock } from "@/shared/concurrency/AsyncLock";
 import { ImagePathNormalizer } from "@/shared/utils/ImagePathNormalizer";

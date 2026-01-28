@@ -1,6 +1,6 @@
 import type { ResourceCleaner } from '../EditorOrchestrator';
-import { clearDocumentAssets as legacyClearAssets } from '../../socket/assets';
-import { revokeObjectUrl as legacyRevokeUrl } from '../../core/lifecycle';
+import { clearDocumentAssets as legacyClearAssets } from '../../infrastructure/socket/AssetsStore';
+import { revokeObjectUrl as legacyRevokeUrl } from '../../shared/utils/LifecycleHelpers';
 
 /**
  * 资源清理器适配器

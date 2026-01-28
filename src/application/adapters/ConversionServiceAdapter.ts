@@ -1,4 +1,4 @@
-import type { EditorInput } from '../../core/types';
+import type { EditorInput } from '../../shared/types/EditorTypes';
 import type {
   ConversionService,
   PreparedInput as UseCasePreparedInput,
@@ -9,7 +9,7 @@ import {
   convertWithX2T as legacyConvertWithX2T,
   type PreparedInput as LegacyPreparedInput,
   type ConvertedInput as LegacyConvertedInput
-} from '../../input/openFile';
+} from '../services/InputProcessingService';
 
 /**
  * 转换服务适配器

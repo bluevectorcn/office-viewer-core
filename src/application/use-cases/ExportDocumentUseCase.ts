@@ -1,4 +1,4 @@
-import type { ExportFormat } from '../../core/types';
+import type { ExportFormat } from '../../shared/types/EditorTypes';
 import type { Logger } from '../../shared/logging/Logger';
 import type { DocumentSession } from './OpenDocumentUseCase';
 import type { DownloadRequester } from './SaveDocumentUseCase';

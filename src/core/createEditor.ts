@@ -1,4 +1,4 @@
-import type { DocEditorConfig, OnlyOfficeEditor } from "./types";
+import type { DocEditorConfig, IEditor } from "../shared/types/EditorTypes";
 import { EditorFactory } from "../application/EditorFactory";
 
 /**
@@ -54,7 +54,7 @@ import { EditorFactory } from "../application/EditorFactory";
 export function createEditor(
   container: HTMLElement,
   baseConfig: DocEditorConfig
-): OnlyOfficeEditor {
+): IEditor {
   // 使用工厂模式创建编辑器实例
   // 工厂负责：
   // 1. 创建和配置所有依赖（依赖注入）

@@ -1,4 +1,4 @@
-import { handleSaveLikeRequest, shouldInterceptUrl } from "./save-handler";
+import { handleSaveLikeRequest, shouldInterceptUrl } from "../../application/handlers/SaveCommandHandler";
 
 const endpointPatchedWindows = new WeakSet<Window>();
 const endpointPatchKey = "__ooLocalEndpointPatch";

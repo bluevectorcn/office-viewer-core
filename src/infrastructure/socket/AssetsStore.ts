@@ -1,4 +1,4 @@
-import { revokeObjectUrl } from "../core/lifecycle";
+import { revokeObjectUrl } from "../../shared/utils/LifecycleHelpers";
 import { ResourceManager } from "@/domain/ResourceManager";
 import { Logger } from "@/shared/logging/Logger";
 

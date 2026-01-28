@@ -1,8 +1,8 @@
-import { emitServerMessage } from "../socket/fake-socket";
-import { createId } from "../core/lifecycle";
-import { type ExportFormat, getFileExtensionByType } from "../core/types";
-import { exportWithX2T, initX2TModule } from "../x2t/service";
-import { getDocumentAssets, registerDownloadUrl } from "../socket/assets";
+import { emitServerMessage } from "../../infrastructure/socket/FakeSocket";
+import { createId } from "../../shared/utils/LifecycleHelpers";
+import { type ExportFormat, getFileExtensionByType } from "../../shared/types/EditorTypes";
+import { exportWithX2T, initX2TModule } from "../../infrastructure/conversion/X2TService";
+import { getDocumentAssets, registerDownloadUrl } from "../../infrastructure/socket/AssetsStore";
 import { ChunkedUploader } from "@/infrastructure/network/ChunkedUploader";
 import { Logger } from "@/shared/logging/Logger";
 
@@ -99,7 +99,6 @@ function ensureExtension(title: string, ext: string) {
 }
 
 function resolveOutputExtension(
-  targetWindow: Window,
   cmd: SaveCommand,
   assets: ReturnType<typeof getDocumentAssets> | undefined
 ) {
@@ -165,17 +164,6 @@ async function toUint8Array(body: unknown) {
     return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   }
   return new Uint8Array();
-}
-
-function concatChunks(chunks: Uint8Array[]) {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const result = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return result;
 }
 
 function toOwnedUint8Array(bytes: Uint8Array) {
@@ -285,27 +273,6 @@ function resolveParentDocKey(targetWindow: Window) {
   }
 }
 
-function getFileTypeName(targetWindow: Window, value: unknown) {
-  const asc = (targetWindow as typeof window & { Asc?: { c_oAscFileType?: Record<string, number> } }).Asc;
-  const fileType = asc?.c_oAscFileType;
-  if (!fileType) return "";
-  if (typeof value === "number") {
-    const entry = Object.entries(fileType).find(([, v]) => v === value);
-    return entry?.[0]?.toLowerCase() ?? "";
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return "";
-    if (/^\d+$/.test(trimmed)) {
-      const num = Number(trimmed);
-      const entry = Object.entries(fileType).find(([, v]) => v === num);
-      return entry?.[0]?.toLowerCase() ?? "";
-    }
-    return trimmed.toLowerCase();
-  }
-  return "";
-}
-
 function completeSave(
   targetWindow: Window,
   docId: string,
@@ -347,7 +314,7 @@ async function finalizeSave(
     debugLog("finalizeSave missing assets", { docId, command: resolveCommand(cmd) });
     return null;
   }
-  const outputExt = resolveOutputExtension(targetWindow, cmd, assets);
+  const outputExt = resolveOutputExtension(cmd, assets);
   const exportFormat = toExportFormat(outputExt, assets);
   const baseTitle =
     (typeof cmd.title === "string" && cmd.title) ||
@@ -445,11 +412,11 @@ async function handleSaveCommand(
     return buildResponse(cmd, assets.editorUrl, ext);
   }
 
-  const fileTypeName = getFileTypeName(targetWindow, cmd.outputformat ?? cmd.filetype ?? cmd.fileType);
+  const fileTypeName = getFileExtensionByType(cmd.outputformat as number);
   if (fileTypeName) {
     cmd.fileType = fileTypeName;
   }
-  const outputExt = resolveOutputExtension(targetWindow, cmd, getDocumentAssets(docId));
+  const outputExt = resolveOutputExtension(cmd, getDocumentAssets(docId));
   debugLog("save command", { docId, savetype, outputExt });
 
   if (savetype === saveTypes.single || cmd.savetype === undefined) {

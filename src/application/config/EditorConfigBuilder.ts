@@ -3,8 +3,8 @@ import type {
   DocumentConfig,
   EditorConfig,
   EventsConfig,
-} from "./types";
-import type { ConvertedInput } from "../input/openFile";
+} from "../../shared/types/EditorTypes";
+import type { ConvertedInput } from "../services/InputProcessingService";
 
 type InternalEvents = {
   onAppReady: () => void;

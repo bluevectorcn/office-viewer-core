@@ -1,4 +1,4 @@
-import type { DocEditorConfig, EditorInput, ExportFormat, OnlyOfficeEditor } from '../core/types';
+import type { DocEditorConfig, EditorInput, ExportFormat, IEditor } from '../shared/types/EditorTypes';
 import { OpenDocumentUseCase } from './use-cases/OpenDocumentUseCase';
 import { SaveDocumentUseCase } from './use-cases/SaveDocumentUseCase';
 import { ExportDocumentUseCase } from './use-cases/ExportDocumentUseCase';
@@ -9,14 +9,14 @@ import { X2TExportServiceAdapter } from './adapters/X2TExportServiceAdapter';
 import { ResourceCleanerAdapter } from './adapters/ResourceCleanerAdapter';
 import { DownloadManager } from './services/DownloadManager';
 import { defaultLogger } from '../shared/logging/Logger';
-import { createId, createReadyLatch } from '../core/lifecycle';
-import { loadDocsApi } from '../core/docsApi';
-import { initX2TModule } from '../x2t/service';
-import { buildEditorConfig } from '../core/config';
-import { observeEditorIframes } from '../core/iframeObserver';
-import { injectGlobals, exposeDocEditorConfig } from '../bootstrap/inject';
-import { setAssetsPrefix } from '../core/assets';
-import { emptyDocx, emptyPptx, emptyXlsx } from '../x2t/empty';
+import { createId, createReadyLatch } from '../shared/utils/LifecycleHelpers';
+import { loadDocsApi } from '../infrastructure/external/DocsApiProvider';
+import { initX2TModule } from '../infrastructure/conversion/X2TService';
+import { buildEditorConfig } from './config/EditorConfigBuilder';
+import { observeEditorIframes } from '../infrastructure/dom/IframeObserver';
+import { injectGlobals, exposeDocEditorConfig } from '../application/initialization/GlobalInjector';
+import { setAssetsPrefix } from '../infrastructure/socket/AssetsPrefix';
+import { emptyDocx, emptyPptx, emptyXlsx } from '../infrastructure/conversion/EmptyDocumentTemplates';
 
 /**
  * 新文件格式
@@ -47,7 +47,7 @@ export class EditorFactory {
    * @param baseConfig - 编辑器基础配置
    * @returns OnlyOfficeEditor 实例（向后兼容的 API）
    */
-  create(container: HTMLElement, baseConfig: DocEditorConfig): OnlyOfficeEditor {
+  create(container: HTMLElement, baseConfig: DocEditorConfig): IEditor {
     // 1. 初始化全局环境
     injectGlobals();
     setAssetsPrefix(baseConfig.assetsPrefix);
@@ -267,4 +267,18 @@ export class EditorFactory {
       return false;
     }
   }
+}
+
+export function createEditor(
+  container: HTMLElement,
+  baseConfig: DocEditorConfig
+): IEditor {
+  // 使用工厂模式创建编辑器实例
+  // 工厂负责：
+  // 1. 创建和配置所有依赖（依赖注入）
+  // 2. 初始化 DocsAPI 和 X2T
+  // 3. 管理 DOM 容器
+  // 4. 返回向后兼容的 API
+  const factory = new EditorFactory();
+  return factory.create(container, baseConfig);
 }

@@ -1,4 +1,4 @@
-import type { EditorInput, DocumentType, ExportFormat } from '../../core/types';
+import type { EditorInput, DocumentType, ExportFormat } from '../../shared/types/EditorTypes';
 import type { Logger } from '../../shared/logging/Logger';
 import { EditorError, ErrorCode } from '../../shared/errors/EditorError';
 

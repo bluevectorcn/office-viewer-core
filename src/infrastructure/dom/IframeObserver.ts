@@ -1,4 +1,4 @@
-import { injectIntoIframe } from "../bootstrap/inject";
+import { injectIntoIframe } from "../../application/initialization/GlobalInjector";
 
 export function observeEditorIframes(container: HTMLElement) {
   const seen = new WeakSet<HTMLIFrameElement>();
