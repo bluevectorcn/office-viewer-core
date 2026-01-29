@@ -24,7 +24,13 @@
 ```bash
 # 克隆仓库并初始化子模块
 git clone <repository-url>
+
 cd office-viewer-core
+
+git submodule add https://github.com/ONLYOFFICE/web-apps.git submodules/onlyoffice/web-apps
+
+git submodule add https://github.com/ONLYOFFICE/sdkjs.git submodules/onlyoffice/sdkjs
+
 git submodule update --init --recursive
 
 # 安装依赖
