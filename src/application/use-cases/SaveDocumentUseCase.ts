@@ -46,19 +46,38 @@ export class SaveDocumentUseCase {
    * 执行保存文档操作
    *
    * @param session - 文档会话
-   * @returns 保存的文档 Blob
+   * @param filename - 可选文件名
+   * @returns 保存的文档 Blob 和最终文件名
    * @throws {EditorError} 当所有保存策略都失败时
    */
-  async execute(session: DocumentSession): Promise<Blob> {
+  async execute(session: DocumentSession, filename?: string): Promise<{ blob: Blob; filename: string }> {
     this.logger.info('Saving document', {
       docId: session.docId,
-      nativeFormat: session.nativeFormat
+      nativeFormat: session.nativeFormat,
+      requestedFilename: filename
     });
+
+    // 1. 确定最终后缀名（处理旧版格式升级）
+    const extension = this.getUpgradeExtension(session.nativeFormat);
+    
+    // 2. 确定最终文件名
+    let finalFilename: string;
+    if (!filename) {
+      // 入参不指定时使用默认名称(doc_时间戳.后缀)
+      finalFilename = `doc_${Date.now()}.${extension}`;
+    } else {
+      // 入参指定时，检查后缀，不匹配自动添加
+      if (!filename.toLowerCase().endsWith('.' + extension)) {
+        finalFilename = `${filename}.${extension}`;
+      } else {
+        finalFilename = filename;
+      }
+    }
 
     try {
       // 策略 1: 从编辑器下载本地格式
       const downloaded = await this.downloadRequester.requestDownload(
-        session.nativeFormat
+        extension
       );
 
       // 更新会话的源 Blob（用于后续操作）
@@ -66,10 +85,11 @@ export class SaveDocumentUseCase {
 
       this.logger.info('Document saved successfully via downloadAs', {
         docId: session.docId,
-        size: downloaded.size
+        size: downloaded.size,
+        filename: finalFilename
       });
 
-      return downloaded;
+      return { blob: downloaded, filename: finalFilename };
 
     } catch (downloadError) {
       this.logger.warn(
@@ -83,7 +103,7 @@ export class SaveDocumentUseCase {
           docId: session.docId,
           size: session.sourceBlob.size
         });
-        return session.sourceBlob;
+        return { blob: session.sourceBlob, filename: finalFilename };
       }
 
       // 策略 3: 从原始 URL 获取
@@ -94,7 +114,7 @@ export class SaveDocumentUseCase {
             docId: session.docId,
             size: blob.size
           });
-          return blob;
+          return { blob, filename: finalFilename };
         } catch (fetchError) {
           this.logger.warn('Failed to fetch from original URL', fetchError instanceof Error ? { error: fetchError.message, stack: fetchError.stack } : { error: fetchError });
         }
@@ -105,7 +125,22 @@ export class SaveDocumentUseCase {
         docId: session.docId
       });
 
-      return new Blob([], { type: 'application/octet-stream' });
+      return { 
+        blob: new Blob([], { type: 'application/octet-stream' }), 
+        filename: finalFilename 
+      };
+    }
+  }
+
+  /**
+   * 获取升级后的后缀名
+   */
+  private getUpgradeExtension(format: string): ExportFormat {
+    switch (format) {
+      case 'doc': return 'docx';
+      case 'xls': return 'xlsx';
+      case 'ppt': return 'pptx';
+      default: return format as ExportFormat;
     }
   }
 

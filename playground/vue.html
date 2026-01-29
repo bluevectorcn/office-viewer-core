@@ -106,12 +106,30 @@
                     console.log('Action: New XLSX');
                     viewer.value?.newFile('xlsx');
                 };
+                const openFile = (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        viewer.value?.open(file);
+                    }
+                    e.target.value = '';
+                };
                 const save = async () => {
                     console.log('Action: Save');
                     try {
-                        const blob = await viewer.value?.save();
-                        console.log('Saved blob:', blob);
-                        alert('File saved! Check console for Blob details.');
+                        const result = await viewer.value?.save();
+                        if (!result) return;
+                        const { blob, filename } = result;
+                        console.log('Saved:', filename, blob);
+                        
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        URL.revokeObjectURL(url);
+                        
                     } catch (e) {
                         console.error('Save failed:', e);
                     }
@@ -123,6 +141,13 @@
                         h('div', { class: 'controls' }, [
                             h('button', { onClick: newDocx }, 'New DOCX'),
                             h('button', { onClick: newXlsx }, 'New XLSX'),
+                            h('button', { onClick: () => document.getElementById('file-input').click() }, 'Open Local File'),
+                            h('input', { 
+                                type: 'file', 
+                                id: 'file-input', 
+                                style: { display: 'none' }, 
+                                onChange: openFile 
+                            }),
                             h('button', { onClick: save }, 'Save')
                         ])
                     ]),

@@ -108,10 +108,29 @@
 
         const handleNewDocx = () => viewerRef.current?.newFile('docx');
         const handleNewXlsx = () => viewerRef.current?.newFile('xlsx');
+        const handleOpenFile = (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                viewerRef.current?.open(file);
+            }
+            e.target.value = '';
+        };
+
         const handleSave = async () => {
-            const blob = await viewerRef.current?.save();
-            console.log('Saved blob:', blob);
-            alert('File saved! Check console for Blob details.');
+            const result = await viewerRef.current?.save();
+            if (!result) return;
+            const { blob, filename } = result;
+            console.log('Saved:', filename, blob);
+            
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            
         };
 
         return React.createElement(
@@ -122,6 +141,13 @@
                 React.createElement('div', { className: 'controls' },
                     React.createElement('button', { onClick: handleNewDocx }, 'New DOCX'),
                     React.createElement('button', { onClick: handleNewXlsx }, 'New XLSX'),
+                    React.createElement('button', { onClick: () => document.getElementById('file-input').click() }, 'Open Local File'),
+                    React.createElement('input', { 
+                        type: 'file', 
+                        id: 'file-input', 
+                        style: { display: 'none' }, 
+                        onChange: handleOpenFile 
+                    }),
                     React.createElement('button', { onClick: handleSave }, 'Save')
                 )
             ),

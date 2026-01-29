@@ -77,6 +77,8 @@
         <div class="controls">
             <button id="btn-new-docx">New DOCX</button>
             <button id="btn-new-xlsx">New XLSX</button>
+            <button id="btn-open">Open Local File</button>
+            <input type="file" id="file-input" style="display: none;">
             <button id="btn-save">Save</button>
         </div>
     </div>
@@ -96,6 +98,7 @@
     console.log('OnlyOfficeCore loaded via ESM');
 
     const viewer = document.getElementById('my-viewer');
+    const fileInput = document.getElementById('file-input');
 
     // Config needed for the viewer
     const config = createBaseConfig({
@@ -131,10 +134,29 @@
 
     document.getElementById('btn-new-docx').addEventListener('click', () => viewer.newFile('docx'));
     document.getElementById('btn-new-xlsx').addEventListener('click', () => viewer.newFile('xlsx'));
+    document.getElementById('btn-open').addEventListener('click', () => fileInput.click());
+    
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            await viewer.open(file);
+        }
+        e.target.value = '';
+    });
+
     document.getElementById('btn-save').addEventListener('click', async () => {
-        const blob = await viewer.save();
-        console.log('Saved blob:', blob);
-        alert('File saved! Check console for Blob details.');
+        const { blob, filename } = await viewer.save();
+        console.log('Saved:', filename, blob);
+        
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        
     });
 </script>
 </body>

@@ -67,11 +67,11 @@ export class OnlyOfficeViewer extends HTMLElement implements IEditor {
     return this.editor.newFile(format);
   }
 
-  public async save(): Promise<Blob> {
+  public async save(filename?: string): Promise<{ blob: Blob; filename: string }> {
     if (!this.editor) {
       throw new Error("Editor not initialized. Call init(config) first.");
     }
-    return this.editor.save();
+    return this.editor.save(filename);
   }
 
   public async export(format: ExportFormat): Promise<Blob> {

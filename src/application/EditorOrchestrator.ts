@@ -124,10 +124,11 @@ export class EditorOrchestrator implements Disposable {
   /**
    * 保存文档
    *
-   * @returns 保存的文档 Blob
+   * @param filename - 可选文件名
+   * @returns 保存的文档 Blob 和文件名
    * @throws {EditorError} 当没有打开的文档或状态不允许保存时
    */
-  async save(): Promise<Blob> {
+  async save(filename?: string): Promise<{ blob: Blob; filename: string }> {
     this.ensureSession();
 
     if (!this.state.canSave()) {
@@ -142,9 +143,9 @@ export class EditorOrchestrator implements Disposable {
     await this.state.transition('saving');
 
     try {
-      const blob = await this.saveUseCase.execute(this.session!);
+      const result = await this.saveUseCase.execute(this.session!, filename);
       await this.state.transition('ready');
-      return blob;
+      return result;
 
     } catch (error) {
       await this.state.transition('error');
@@ -177,7 +178,8 @@ export class EditorOrchestrator implements Disposable {
       // 如果导出格式是本地格式，先保存获取最新内容
       let sourceBlob: Blob | undefined;
       if (format === this.session!.nativeFormat) {
-        sourceBlob = await this.saveUseCase.execute(this.session!);
+        const result = await this.saveUseCase.execute(this.session!);
+        sourceBlob = result.blob;
       }
 
       const blob = await this.exportUseCase.execute(

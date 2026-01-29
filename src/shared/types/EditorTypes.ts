@@ -8,7 +8,7 @@ export type Group = string;
 export interface IEditor {
   open(input: EditorInput): Promise<void>;
   newFile(format: "docx" | "xlsx" | "pptx"): Promise<void>;
-  save(): Promise<Blob>;
+  save(filename?: string): Promise<{ blob: Blob; filename: string }>;
   export(format: ExportFormat): Promise<Blob>;
   destroy(): void;
 }

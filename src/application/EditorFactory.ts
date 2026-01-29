@@ -214,7 +214,7 @@ export class EditorFactory {
     return {
       open: openDocument,
       newFile,
-      save: () => orchestrator.save(),
+      save: (filename?: string) => orchestrator.save(filename),
       export: (format: ExportFormat) => orchestrator.export(format),
       destroy
     };

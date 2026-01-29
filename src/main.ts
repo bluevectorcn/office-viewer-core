@@ -8,8 +8,8 @@ const urlInput = document.getElementById("url-input") as HTMLInputElement | null
 const openDemoBtn = document.getElementById("open-demo");
 const openUrlBtn = document.getElementById("open-url");
 const saveBtn = document.getElementById("save");
-const exportPdfBtn = document.getElementById("export-pdf");
-const exportDocxBtn = document.getElementById("export-docx");
+// const exportPdfBtn = document.getElementById("export-pdf");
+// const exportDocxBtn = document.getElementById("export-docx");
 const editorHost = document.getElementById("editor");
 
 if (!editorHost) {
@@ -113,23 +113,23 @@ openUrlBtn?.addEventListener("click", async () => {
 
 saveBtn?.addEventListener("click", async () => {
   setStatus("Saving...");
-  const blob = await editor.save();
-  downloadBlob(blob, "onlyoffice-save.docx");
-  setStatus("Saved");
+  const { blob, filename } = await editor.save();
+  downloadBlob(blob, filename);
+  setStatus(`Saved as ${filename}`);
 });
 
-exportPdfBtn?.addEventListener("click", async () => {
-  setStatus("Exporting PDF...");
-  const blob = await editor.export("pdf");
-  downloadBlob(blob, "onlyoffice-export.pdf");
-  setStatus("Exported PDF");
-});
+// exportPdfBtn?.addEventListener("click", async () => {
+//   setStatus("Exporting PDF...");
+//   const blob = await editor.export("pdf");
+//   downloadBlob(blob, "onlyoffice-export.pdf");
+//   setStatus("Exported PDF");
+// });
 
-exportDocxBtn?.addEventListener("click", async () => {
-  setStatus("Exporting Docx...");
-  const blob = await editor.export("docx");
-  downloadBlob(blob, "onlyoffice-export.docx");
-  setStatus("Exported Docx");
-});
+// exportDocxBtn?.addEventListener("click", async () => {
+//   setStatus("Exporting Docx...");
+//   const blob = await editor.export("docx");
+//   downloadBlob(blob, "onlyoffice-export.docx");
+//   setStatus("Exported Docx");
+// });
 
 setStatus("Idle");
