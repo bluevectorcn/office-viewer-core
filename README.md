@@ -9,12 +9,29 @@
 - **现代架构**：采用 Clean Architecture 设计模式，解耦业务逻辑、应用用例和基础设施实现。
 - **全能编辑**：支持 DOCX, XLSX, PPTX 的在线编辑，以及多格式（PDF, DOCX 等）的导出。
 - **灵活部署**：支持自定义静态资源前缀（`assetsPrefix`），适配各种 CDN 和静态服务器布局。
+- **自定义字体支持**：支持通过 Docker 自动生成并集成自定义字体。
 
 ## 环境要求
 
 - **Node.js**: 24.12.0+ (建议使用最新版本)
 - **pnpm**: 9.12.3+
 - **Git**: 用于管理 submodules
+- **Docker**: (可选) 用于生成自定义字体
+
+## 自定义字体与 WASM
+
+只有在需要集成自定义字体时才需要执行此步骤。
+
+1. **添加字体**：将您的字体文件（.ttf, .otf）放入项目根目录下的 `fonts/` 目录中。
+2. **构建**：运行 `pnpm build:onlyoffice`。脚本会自动检测 `fonts/` 目录，如果存在文件，将调用 Docker 容器 `jacktea/allfontsgen` 生成字体配置并集成到构建产物中。
+3. **生成的产物**：
+    - `AllFonts.js`, `font_selection.bin` -> `vendor/onlyoffice/sdkjs/common/`
+    - 缩略图 -> `vendor/onlyoffice/sdkjs/common/Images/`
+    - 字体文件 -> `vendor/onlyoffice/fonts/`
+
+此外，项目根目录 `wasm/x2t` 下的文件也会被自动拷贝到 `vendor/onlyoffice/x2t`。
+
+所有 `js`, `css`, `wasm` 资源在构建时会自动进行 Brotli (.br) 压缩。
 
 ## 快速开始
 
@@ -148,3 +165,16 @@ server {
 - `editorConfig`: 编辑器界面定制、语言设置等。
 
 详情请参考 `src/shared/types/EditorTypes.ts`。
+
+## 致谢
+
+只有优秀的开源项目才让 `onlyoffice-core` 成为可能：
+
+- [cryptpad/onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) (x2t.wasm)
+- [ONLYOFFICE/sdkjs](https://github.com/ONLYOFFICE/sdkjs)
+- [ONLYOFFICE/web-apps](https://github.com/ONLYOFFICE/web-apps)
+- [ONLYOFFICE/dictionaries](https://github.com/ONLYOFFICE/dictionaries)
+
+### 开启拼写检查
+
+如需开启编辑器的拼写检查功能，请下载 [dictionaries](https://github.com/ONLYOFFICE/dictionaries) 项目的内容，并将其拷贝到部署目录的 `vendor/onlyoffice/dictionaries` 下。

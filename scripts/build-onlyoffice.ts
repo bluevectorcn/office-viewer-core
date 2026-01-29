@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 
 const rootDir = process.cwd();
 const mainPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf-8"));
@@ -42,6 +43,9 @@ function run(command: string, args: string[], cwd: string, extraEnv = {}): numbe
 function syncSubmodule(dir: string, version: string) {
   if (!version || !fs.existsSync(dir)) return;
   console.log(`Syncing submodule at ${path.relative(rootDir, dir)} to v${version}...`);
+  
+  // 获取最新代码和标签
+  spawnSync("git", ["fetch", "--all", "--tags", "--force"], { cwd: dir });
   
   // 重置任何可能的修改
   spawnSync("git", ["checkout", "."], { cwd: dir });
@@ -138,10 +142,127 @@ syncSubmodule(sdkjsDir, fullVersion);
 
 patchOnlyOfficeConfigs();
 
+function processFonts() {
+  const fontsSource = path.join(rootDir, "fonts");
+  if (!fs.existsSync(fontsSource) || fs.readdirSync(fontsSource).length === 0) {
+    console.log("No custom fonts found in 'fonts' directory. Skipping font generation.");
+    return;
+  }
+
+  console.log("Processing custom fonts...");
+  const tempOut = path.join(rootDir, "temp_fonts_out");
+  fs.rmSync(tempOut, { recursive: true, force: true });
+  fs.mkdirSync(tempOut);
+
+  try {
+    const uid = process.getuid ? process.getuid() : 0;
+    const gid = process.getgid ? process.getgid() : 0;
+
+    console.log("Running Docker container for font generation...");
+    // 假设 docker 在 PATH 中
+    const dockerResult = spawnSync("docker", [
+      "run", "--rm",
+      "--user", `${uid}:${gid}`,
+      "-v", `${fontsSource}:/fonts`,
+      "-v", `${tempOut}:/out`,
+      "jacktea/allfontsgen:latest",
+      "/fonts", "/out"
+    ], { stdio: "inherit" });
+
+    if (dockerResult.status !== 0) {
+      console.error("Docker font generation failed.");
+      // 不中断构建，只是打印错误？或者应该抛出异常？
+      // 根据用户需求，这里应该是一个重要步骤，但如果没有docker可能应该警告。
+      // 为了安全起见，我们打印错误但不 crash 整个 build，除非 strict mode。
+      // 这里选择打印错误。
+    } else {
+      console.log("Fonts generated successfully. Copying artifacts...");
+
+      const sdkjsCommonDir = path.join(rootDir, "vendor", "onlyoffice", "sdkjs", "common");
+      const sdkjsImagesDir = path.join(sdkjsCommonDir, "Images");
+      const onlyofficeDir = path.join(rootDir, "vendor", "onlyoffice");
+
+      // 1. AllFonts.js, font_selection.bin -> vendor/onlyoffice/sdkjs/common
+      ["AllFonts.js", "font_selection.bin"].forEach(file => {
+        const src = path.join(tempOut, file);
+        if (fs.existsSync(src)) {
+           fs.cpSync(src, path.join(sdkjsCommonDir, file), { force: true });
+        }
+      });
+      
+      // 2. font_thumbs/* -> vendor/onlyoffice/sdkjs/common/Images
+      const thumbsSrc = path.join(tempOut, "font_thumbs");
+      if (fs.existsSync(thumbsSrc)) {
+         fs.cpSync(thumbsSrc, sdkjsImagesDir, { recursive: true, force: true });
+      }
+
+      // 3. fonts/* -> vendor/onlyoffice
+      // 注意：输出目录里的 fonts 是一个目录，要在 vendor/onlyoffice 下也叫 fonts
+      const fontsDstSrc = path.join(tempOut, "fonts");
+      if (fs.existsSync(fontsDstSrc)) {
+        // 如果目标存在，先清理还是合并？cpSync 默认是 overwrite file，但不会删除多余文件。
+        // 这里假设是合并或覆盖。
+        const fontsTarget = path.join(onlyofficeDir, "fonts");
+        fs.mkdirSync(fontsTarget, { recursive: true });
+        fs.cpSync(fontsDstSrc, fontsTarget, { recursive: true, force: true });
+      }
+    }
+  } finally {
+    fs.rmSync(tempOut, { recursive: true, force: true });
+  }
+}
+
+function copyWasm() {
+  const wasmX2tSource = path.join(rootDir, "wasm", "x2t");
+  if (!fs.existsSync(wasmX2tSource)) return;
+
+  console.log("Copying x2t WASM files...");
+  const targetDir = path.join(rootDir, "vendor", "onlyoffice", "x2t"); // 假设放在 vendor/onlyoffice/x2t
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  
+  // 按照用户指令：把目录wasm下的x2t,拷贝到 vendor/onlyoffice 目录下。
+  // 这意味着 vendor/onlyoffice 下会有一个 x2t 目录。
+  fs.cpSync(wasmX2tSource, targetDir, { recursive: true });
+}
+
+function compressAssets(dir: string) {
+  if (!fs.existsSync(dir)) return;
+  
+  console.log(`Compressing assets in ${path.relative(rootDir, dir)}...`);
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      compressAssets(fullPath);
+    } else if (file.isFile()) {
+       if (/\.(js|css|wasm)$/.test(file.name)) {
+         try {
+           const content = fs.readFileSync(fullPath);
+           const compressed = zlib.brotliCompressSync(content, {
+             params: {
+               [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
+               [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
+             }
+           });
+           fs.writeFileSync(fullPath + ".br", compressed);
+         } catch (e) {
+           console.error(`Failed to compress ${file.name}:`, e);
+         }
+       }
+    }
+  }
+}
+
 const packageManager = process.env.ONLYOFFICE_PM ?? "pnpm";
 let buildExitCode = 0;
 
 try {
+  // 0. 清理 vendor/onlyoffice
+  console.log("Cleaning up vendor/onlyoffice...");
+  const onlyofficeVendorPath = path.join(rootDir, "vendor", "onlyoffice");
+  fs.rmSync(onlyofficeVendorPath, { recursive: true, force: true });
+
   // 1. 显式构建 sdkjs
   const sdkjsBuildDir = path.join(sdkjsDir, "build");
   if (fs.existsSync(sdkjsBuildDir)) {
@@ -177,6 +298,25 @@ try {
   if (sdkjsBuildOutput) {
       moveOutput(sdkjsBuildOutput, sdkjsVendorDir);
       console.log(`Successfully moved OnlyOffice SDKJS to ${path.relative(rootDir, sdkjsVendorDir)}`);
+  }
+
+  // 4. 处理字体、WASM 和 压缩
+  processFonts();
+  copyWasm();
+  
+  // 5. 复制 Service Worker
+  const swSource = path.join(rootDir, "vendor", "onlyoffice", "sdkjs", "common", "serviceworker", "document_editor_service_worker.js");
+  const swTarget = path.join(rootDir, "vendor", "onlyoffice", "document_editor_service_worker.js");
+  if (fs.existsSync(swSource)) {
+    console.log("Copying Service Worker...");
+    fs.cpSync(swSource, swTarget, { force: true });
+  } else {
+    console.warn(`Warning: Service Worker not found at ${swSource}`);
+  }
+  
+  const onlyofficeVendorRoot = path.join(rootDir, "vendor", "onlyoffice");
+  if (fs.existsSync(onlyofficeVendorRoot)) {
+    compressAssets(onlyofficeVendorRoot);
   }
 } finally {
   console.log("Cleaning up submodules...");
