@@ -9,3 +9,4 @@ fonts/*.otf
 wasm/x2t/x2t.js
 wasm/x2t/x2t.wasm
 CLAUDE.md
+.claude

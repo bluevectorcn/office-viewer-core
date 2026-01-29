@@ -1,11 +1,11 @@
-# OnlyOffice Core Playground
+# Office Viewer Core Playground
 
-This playground demonstrates the usage of the `onlyoffice-core` library via the UMD build.
+This playground demonstrates the usage of the `office-viewer-core` library via the UMD build.
 
 ## Prerequisites
 
 1.  **Dependencies**: Ensure `react`, `react-dom`, and `vue` global scripts are loaded (already included in `index.html` via CDN).
-2.  **Static Assets**: The `onlyoffice-core` relies on WASM and other static files being served at a specific path (default `/vendor/onlyoffice`).
+2.  **Static Assets**: The `office-viewer-core` relies on WASM and other static files being served at a specific path (default `/vendor/onlyoffice`).
 
 ## How to Run
 
@@ -37,4 +37,4 @@ This playground demonstrates the usage of the `onlyoffice-core` library via the 
 
 ## Usage in Code
 
-See `index.html` source code for how `window.OnlyOfficeCore` is used.
+See `index.html` source code for how `window.OfficeViewerCore` is used.

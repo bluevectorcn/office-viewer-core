@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OnlyOffice Core - Vue Playground</title>
+    <title>Office Viewer Core - Vue Playground</title>
     <link rel="stylesheet" href="../dist-lib/style.css">
     <style>
         html, body { 
@@ -67,8 +67,8 @@
     {
         "imports": {
             "vue": "https://esm.sh/vue@3.5.27",
-            "onlyoffice-core": "../dist-lib/index.es.js",
-            "onlyoffice-core/vue": "../dist-lib/vue.es.js"
+            "office-viewer-core": "../dist-lib/index.es.js",
+            "office-viewer-core/vue": "../dist-lib/vue.es.js"
         }
     }
     </script>
@@ -78,8 +78,8 @@
 
     <script type="module">
         import { createApp, ref, onMounted, h } from 'vue';
-        import { createBaseConfig } from 'onlyoffice-core';
-        import { OnlyOfficeViewer } from 'onlyoffice-core/vue';
+        import { createBaseConfig } from 'office-viewer-core';
+        import { OnlyOfficeViewer } from 'office-viewer-core/vue';
 
         const App = {
             setup() {

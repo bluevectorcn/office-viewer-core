@@ -38,7 +38,7 @@ export default defineConfig({
         vue: path.resolve(__dirname, "src/vue.ts"),
         'web-component': path.resolve(__dirname, "src/web-component.ts"),
       },
-      name: "OnlyOfficeCore",
+      name: "OfficeViewerCore",
       fileName: (format, entryName) => `${entryName}.${format}.js`,
     },
     rollupOptions: {

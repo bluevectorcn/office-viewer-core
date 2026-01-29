@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OnlyOffice Core - React Playground</title>
+    <title>Office Viewer Core - React Playground</title>
     <style>
         html, body { 
             height: 100%; 
@@ -71,8 +71,8 @@
             "react-dom/client": "https://esm.sh/react-dom@19/client",
             "valibot": "https://esm.sh/valibot", 
             
-            "onlyoffice-core": "../dist-lib/index.es.js",
-            "onlyoffice-core/react": "../dist-lib/react.es.js"
+            "office-viewer-core": "../dist-lib/index.es.js",
+            "office-viewer-core/react": "../dist-lib/react.es.js"
         }
     }
     </script>
@@ -84,8 +84,8 @@
 <script type="module">
     import React, { useState, useRef } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { createBaseConfig } from 'onlyoffice-core';
-    import { OnlyOfficeViewer } from 'onlyoffice-core/react';
+    import { createBaseConfig } from 'office-viewer-core';
+    import { OnlyOfficeViewer } from 'office-viewer-core/react';
 
     const App = () => {
         const viewerRef = useRef(null);

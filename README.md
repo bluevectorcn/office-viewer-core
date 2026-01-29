@@ -1,4 +1,4 @@
-# OnlyOffice WASM Core (onlyoffice-core)
+# Office Viewer Core (office-viewer-core)
 
 这是一个基于 WebAssembly (WASM) 的 OnlyOffice 核心组件，旨在提供一个纯前端、无后端依赖的文档编辑黑盒。它可以轻松集成到 React、Vue 或其他前端框架中。
 
@@ -39,7 +39,7 @@
 ```bash
 # 克隆仓库并初始化子模块
 git clone <repository-url>
-cd onlyoffice-core
+cd office-viewer-core
 git submodule update --init --recursive
 
 # 安装依赖
@@ -134,7 +134,7 @@ server {
     # ... SSL 配置
 
     location /vendor/onlyoffice/ {
-        alias /path/to/onlyoffice-core/vendor/onlyoffice/;
+        alias /path/to/office-viewer-core/vendor/onlyoffice/;
         
         # 必须：开启跨域隔离
         add_header Cross-Origin-Opener-Policy same-origin;
@@ -153,9 +153,9 @@ server {
 ### 安装
 
 ```bash
-npm install onlyoffice-core
+npm install office-viewer-core
 # 或
-pnpm add onlyoffice-core
+pnpm add office-viewer-core
 ```
 
 ### 1. Web Component 集成
@@ -166,8 +166,8 @@ pnpm add onlyoffice-core
 <!-- index.html -->
 <script type="module">
   // 引入 Web Component 定义
-  import 'onlyoffice-core/web-component';
-  import { createBaseConfig } from 'onlyoffice-core';
+  import 'office-viewer-core/web-component';
+  import { createBaseConfig } from 'office-viewer-core';
 
   const viewer = document.getElementById('viewer');
   const config = createBaseConfig({
@@ -187,8 +187,8 @@ pnpm add onlyoffice-core
 ### 2. React 集成
 
 ```tsx
-import { OnlyOfficeViewer } from 'onlyoffice-core/react';
-import { createBaseConfig } from 'onlyoffice-core';
+import { OnlyOfficeViewer } from 'office-viewer-core/react';
+import { createBaseConfig } from 'office-viewer-core';
 
 function App() {
   const config = createBaseConfig({
@@ -217,8 +217,8 @@ function App() {
 </template>
 
 <script setup>
-import { OnlyOfficeViewer } from 'onlyoffice-core/vue';
-import { createBaseConfig } from 'onlyoffice-core';
+import { OnlyOfficeViewer } from 'office-viewer-core/vue';
+import { createBaseConfig } from 'office-viewer-core';
 
 const config = createBaseConfig({
   assetsPrefix: '/vendor/onlyoffice',
@@ -263,7 +263,7 @@ const onReady = (editor) => {
 
 ## 致谢
 
-只有优秀的开源项目才让 `onlyoffice-core` 成为可能：
+只有优秀的开源项目才让 `office-viewer-core` 成为可能：
 
 - [cryptpad/onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) (x2t.wasm)
 - [ONLYOFFICE/sdkjs](https://github.com/ONLYOFFICE/sdkjs)
