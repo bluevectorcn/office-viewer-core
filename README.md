@@ -118,7 +118,7 @@ await editor.open(fileBlob);
 | :--- | :--- |
 | `open(input)` | 打开文档，支持 `File`, `Blob`, `ArrayBuffer` 或远程 `URL` |
 | `newFile(format)` | 创建并打开新文件，支持 `'docx'`, `'xlsx'`, `'pptx'` |
-| `save()` | 将当前编辑的内容保存并返回 `Promise<Blob>` (DOCX 格式) |
+| `save(filename?)` | 将当前内容保存，返回 `Promise<{ blob: Blob, filename: string }>` |
 | `export(format)` | 导出到特定格式，支持 `'pdf'`, `'docx'`, `'xlsx'`, `'pptx'` |
 | `destroy()` | 销毁编辑器实例，清理内存并移除 DOM 元素 |
 
