@@ -272,15 +272,6 @@ function runX2T(runtime: X2TRuntime, paramsPath: string) {
   }
 }
 
-function tryRunX2T(runtime: X2TRuntime, paramsPath: string) {
-  try {
-    runX2T(runtime, paramsPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function pathExists(FS: X2TFS, path: string) {
   try {
     return FS.analyzePath(path).exists;
@@ -382,18 +373,12 @@ export async function convertToEditorBin(input: File, title: string) {
   if (sourceExt === "pdf") {
     FS.writeFile(EDITOR_BIN_PATH, bytes);
   } else if (sourceExt === "doc") {
-    // Align with the online example: run 3 times without m_nFormatFrom/To.
-    // 1) doc -> Editor.bin (best-effort)
-    // const docToBinParams = buildParamsXml(sourcePath, EDITOR_BIN_PATH);
-    // FS.writeFile(PARAMS_PATH, docToBinParams);
-    // const directCode = runX2TCode(runtime, PARAMS_PATH);
-
-    // 2) doc -> docx
+    // 1) doc -> docx
     const docToDocxParams = buildParamsXml(sourcePath, DOC_VIA_PATH);
     FS.writeFile(PARAMS_PATH, docToDocxParams);
     const viaCode = runX2TCode(runtime, PARAMS_PATH);
 
-    // 3) docx -> Editor.bin
+    // 2) docx -> Editor.bin
     const docxToBinParams = buildParamsXml(DOC_VIA_PATH, EDITOR_BIN_PATH);
     FS.writeFile(PARAMS_PATH, docxToBinParams);
     const hasViaDocx = pathExists(FS, DOC_VIA_PATH);
