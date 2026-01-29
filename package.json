@@ -1,6 +1,7 @@
 {
   "name": "office-viewer-core",
   "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "onlyoffice": {
@@ -37,6 +38,7 @@
     "@vitest/ui": "^4.0.18",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
+    "glob": "^13.0.0",
     "jsdom": "^27.4.0",
     "prettier": "^3.8.1",
     "react": "^19.2.4",

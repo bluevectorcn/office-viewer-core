@@ -273,3 +273,7 @@ const onReady = (editor) => {
 ### 开启拼写检查
 
 如需开启编辑器的拼写检查功能，请下载 [dictionaries](https://github.com/ONLYOFFICE/dictionaries) 项目的内容，并将其拷贝到部署目录的 `vendor/onlyoffice/dictionaries` 下。
+
+## License
+
+本项目采用 [AGPL-3.0](LICENSE) 许可证。
