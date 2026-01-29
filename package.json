@@ -1,7 +1,6 @@
 {
   "name": "onlyoffice-core",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "onlyoffice": {
@@ -11,7 +10,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:playground": "vite",
     "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
     "preview": "vite preview",
     "build:onlyoffice": "tsx scripts/build-onlyoffice.ts",
     "test": "vitest",
@@ -27,17 +28,59 @@
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "@types/node": "^20.14.9",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitejs/plugin-vue": "^6.0.3",
     "@vitest/ui": "^4.0.18",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^27.4.0",
     "prettier": "^3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
-    "vitest": "^4.0.18"
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.0.18",
+    "vue": "^3.5.27"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "vue": "^3.0.0"
+  },
+  "files": [
+    "dist-lib"
+  ],
+  "main": "./dist-lib/index.cjs.js",
+  "module": "./dist-lib/index.es.js",
+  "types": "./dist-lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist-lib/index.es.js",
+      "require": "./dist-lib/index.cjs.js",
+      "types": "./dist-lib/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist-lib/react.es.js",
+      "require": "./dist-lib/react.cjs.js",
+      "types": "./dist-lib/react.d.ts"
+    },
+    "./vue": {
+      "import": "./dist-lib/vue.es.js",
+      "require": "./dist-lib/vue.cjs.js",
+      "types": "./dist-lib/vue.d.ts"
+    },
+    "./web-component": {
+      "import": "./dist-lib/web-component.es.js",
+      "require": "./dist-lib/web-component.cjs.js",
+      "types": "./dist-lib/web-component.d.ts"
+    },
+    "./playground": "./playground/index.html"
   },
   "engines": {
     "node": ">=24.12.0"

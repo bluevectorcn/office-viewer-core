@@ -55,6 +55,8 @@ export class EditorFactory {
     // 2. 创建 DOM host
     const host = document.createElement('div');
     host.className = 'editor-host';
+    host.style.width = '100%';
+    host.style.height = '100%';
     const hostId = createId('oo-editor');
     host.id = hostId;
     container.appendChild(host);
@@ -197,8 +199,13 @@ export class EditorFactory {
 
     // 12. 自动打开配置中的文档
     setTimeout(() => {
+      if (orchestrator.getCurrentSession()) {
+        logger.debug('Session already active, skipping auto-open');
+        return;
+      }
       const url = baseConfig?.document?.url;
       if (this.shouldAutoOpen(url)) {
+        logger.info('Auto-opening document from config', { url });
         void openDocument(url as string);
       }
     }, 0);
@@ -243,13 +250,19 @@ export class EditorFactory {
   /**
    * 将字符串转换为二进制字节
    */
+  /**
+   * 将 Base64 字符串转换为二进制字节
+   */
   private toBinaryBytes(data: string): Uint8Array {
-    const buffer = new ArrayBuffer(data.length);
-    const view = new Uint8Array(buffer);
-    for (let index = 0; index < data.length; index += 1) {
-      view[index] = data.charCodeAt(index);
+    // 移除所有空白字符（换行、空格等）
+    const sanitized = data.replace(/\s/g, '');
+    const binary = window.atob(sanitized);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
     }
-    return view;
+    return bytes;
   }
 
   /**

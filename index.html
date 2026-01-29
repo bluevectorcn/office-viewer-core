@@ -106,13 +106,16 @@
         padding: 0 24px 24px;
       }
 
-      #editor > .editor-host {
+      #editor > .editor-host,
+      #editor > iframe {
         height: calc(100vh - 240px);
         min-height: 480px;
         border: 1px solid var(--line);
         border-radius: 16px;
         background: #fff;
         overflow: hidden;
+        width: 100%;
+        display: block;
       }
 
       @media (max-width: 720px) {

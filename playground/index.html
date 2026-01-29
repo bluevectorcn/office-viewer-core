@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlyOffice Core Playground</title>
+    <style>
+        body { font-family: sans-serif; padding: 40px; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 10px 0; }
+        a { text-decoration: none; color: #007bff; font-size: 1.2rem; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>OnlyOffice Core Playground</h1>
+    <p>Select a framework example to run:</p>
+    <ul>
+        <li><a href="web.html">Web Component (Native)</a></li>
+        <li><a href="react.html">React Component</a></li>
+        <li><a href="vue.html">Vue Component</a></li>
+    </ul>
+    
+    <h3>Setup Note</h3>
+    <p>Ensure you have built the library and static assets:</p>
+    <pre>pnpm build:lib
+pnpm build:onlyoffice</pre>
+    <p>Run this page via a local server (e.g. `npx serve .` or `python3 -m http.server`) <b>at the project root</b>.</p>
+</body>
+</html>

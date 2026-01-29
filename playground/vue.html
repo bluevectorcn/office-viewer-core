@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlyOffice Core - Vue Playground</title>
+    <style>
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+        }
+        #app { 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+        }
+        .header {
+            padding: 20px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .controls { 
+            display: flex; 
+            gap: 12px; 
+            margin-top: 15px; 
+        }
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .editor-container { 
+            flex: 1; 
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #d2d2d7;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #0071e3;
+            background: #0071e3;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #0077ed;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "vue": "https://esm.sh/vue@3.5.27",
+            "onlyoffice-core": "../dist-lib/index.es.js",
+            "onlyoffice-core/vue": "../dist-lib/vue.es.js"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="module">
+        import { createApp, ref, onMounted, h } from 'vue';
+        import { createBaseConfig } from 'onlyoffice-core';
+        import { OnlyOfficeViewer } from 'onlyoffice-core/vue';
+
+        const App = {
+            setup() {
+                const viewer = ref(null);
+                const config = createBaseConfig({
+                    document: {
+                        permissions: { edit: true, download: true }
+                    },
+                    editorConfig: {
+                        lang: "en",
+                        customization: { about: true, comments: true }
+                    }
+                });
+
+                const onReady = (editor) => {
+                    console.log('OnlyOffice Editor Ready');
+                    editor.newFile('docx');
+                };
+
+                const newDocx = () => {
+                    console.log('Action: New DOCX');
+                    viewer.value?.newFile('docx');
+                };
+                const newXlsx = () => {
+                    console.log('Action: New XLSX');
+                    viewer.value?.newFile('xlsx');
+                };
+                const save = async () => {
+                    console.log('Action: Save');
+                    try {
+                        const blob = await viewer.value?.save();
+                        console.log('Saved blob:', blob);
+                        alert('File saved! Check console for Blob details.');
+                    } catch (e) {
+                        console.error('Save failed:', e);
+                    }
+                };
+
+                return () => h('div', { class: 'app-wrapper', style: { display: 'flex', flexDirection: 'column', height: '100%' } }, [
+                    h('div', { class: 'header' }, [
+                        h('h1', 'OnlyOffice Vue Playground'),
+                        h('div', { class: 'controls' }, [
+                            h('button', { onClick: newDocx }, 'New DOCX'),
+                            h('button', { onClick: newXlsx }, 'New XLSX'),
+                            h('button', { onClick: save }, 'Save')
+                        ])
+                    ]),
+                    h('div', { class: 'main-content' }, [
+                        h('div', { class: 'editor-container' }, [
+                            h(OnlyOfficeViewer, {
+                                ref: viewer,
+                                config: config,
+                                onReady: onReady,
+                                style: { height: '100%', width: '100%'}
+                            })
+                        ])
+                    ])
+                ]);
+            }
+        };
+
+        try {
+            console.log('Mounting Vue app using render functions...');
+            createApp(App).mount('#app');
+            console.log('Vue app mounted.');
+        } catch (err) {
+            console.error('Mount failed:', err);
+            document.body.innerHTML = `<div style="color:red; padding:20px;">Mount Failed: ${err.message}</div>`;
+        }
+    </script>
+</body>
+</html>

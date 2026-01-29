@@ -90,11 +90,7 @@ async function openInput(input: File | Blob | ArrayBuffer | string) {
 }
 
 openDemoBtn?.addEventListener("click", async () => {
-  const blob = base64ToBlob(
-    DEMO_DOCX_BASE64,
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
-  await openInput(blob);
+  await editor.newFile("docx");
 });
 
 fileInput?.addEventListener("change", async () => {

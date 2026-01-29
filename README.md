@@ -4,7 +4,6 @@
 
 ## 核心特性
 
-- **零后端依赖**：通过注入全局 `window.io` (FakeSocket) 拦截网络请求，实现纯前端运行。
 - **WASM 驱动**：利用 OnlyOffice `web-apps` 和 `x2t` 的 WASM 版本进行高效的文档处理和转换。
 - **现代架构**：采用 Clean Architecture 设计模式，解耦业务逻辑、应用用例和基础设施实现。
 - **全能编辑**：支持 DOCX, XLSX, PPTX 的在线编辑，以及多格式（PDF, DOCX 等）的导出。
@@ -146,6 +145,102 @@ server {
     }
 }
 ```
+
+## NPM 包集成指南
+
+本项目可以作为 npm 包被第三方系统集成。
+
+### 安装
+
+```bash
+npm install onlyoffice-core
+# 或
+pnpm add onlyoffice-core
+```
+
+### 1. Web Component 集成
+
+适用于所有现代 Web 框架或原生 HTML/JS 项目。
+
+```html
+<!-- index.html -->
+<script type="module">
+  // 引入 Web Component 定义
+  import 'onlyoffice-core/web-component';
+  import { createBaseConfig } from 'onlyoffice-core';
+
+  const viewer = document.getElementById('viewer');
+  const config = createBaseConfig({
+    assetsPrefix: '/vendor/onlyoffice', 
+    editorConfig: { lang: 'zh' }
+  });
+  
+  // 初始化
+  viewer.init(config).then(() => {
+    viewer.newFile('docx');
+  });
+</script>
+
+<onlyoffice-viewer id="viewer"></onlyoffice-viewer>
+```
+
+### 2. React 集成
+
+```tsx
+import { OnlyOfficeViewer } from 'onlyoffice-core/react';
+import { createBaseConfig } from 'onlyoffice-core';
+
+function App() {
+  const config = createBaseConfig({
+    assetsPrefix: '/vendor/onlyoffice',
+    editorConfig: { lang: 'zh' }
+  });
+
+  return (
+    <div style={{ height: '600px' }}>
+      <OnlyOfficeViewer 
+        config={config} 
+        onEditorReady={(editor) => console.log('Ready', editor)} 
+      />
+    </div>
+  );
+}
+```
+
+### 3. Vue 集成
+
+```tsx
+<template>
+  <div style="height: 600px">
+    <OnlyOfficeViewer :config="config" @ready="onReady" />
+  </div>
+</template>
+
+<script setup>
+import { OnlyOfficeViewer } from 'onlyoffice-core/vue';
+import { createBaseConfig } from 'onlyoffice-core';
+
+const config = createBaseConfig({
+  assetsPrefix: '/vendor/onlyoffice',
+  editorConfig: { lang: 'zh' }
+});
+
+const onReady = (editor) => {
+  console.log('Editor ready', editor);
+};
+</script>
+```
+
+### Playground 示例
+
+项目中包含一个简单的 Playground 示例：
+
+1. 运行 `pnpm build:lib` 构建库。
+2. 打开 `playground/index.html` (需通过 HTTP 服务器访问，例如使用 Live Server 或 `npx serve .`)。
+
+### API 参考
+
+所有组件均通过 Ref 或回调暴露 `IEditor` 接口，支持 `open`, `newFile`, `save`, `export` 等操作。
 
 ## 开发者脚本
 

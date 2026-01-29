@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlyOffice Core - Web Component Playground</title>
+    <style>
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+        }
+        #app { 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+        }
+        .header {
+            padding: 20px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .controls { 
+            display: flex; 
+            gap: 12px; 
+            margin-top: 15px; 
+        }
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .editor-container { 
+            flex: 1; 
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #d2d2d7;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #0071e3;
+            background: #0071e3;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #0077ed;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        onlyoffice-viewer {
+            flex: 1;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="header">
+        <h1>OnlyOffice Web Component Playground</h1>
+        <div class="controls">
+            <button id="btn-new-docx">New DOCX</button>
+            <button id="btn-new-xlsx">New XLSX</button>
+            <button id="btn-save">Save</button>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="editor-container">
+            <onlyoffice-viewer id="my-viewer"></onlyoffice-viewer>
+        </div>
+    </div>
+</div>
+
+<!-- Local library build (ESM) -->
+<script type="module">
+    import { createBaseConfig } from '../dist-lib/index.es.js';
+    import '../dist-lib/web-component.es.js';
+
+    console.log('OnlyOfficeCore loaded via ESM');
+
+    const viewer = document.getElementById('my-viewer');
+
+    // Config needed for the viewer
+    const config = createBaseConfig({
+        document: {
+            permissions: {
+                edit: true,
+                download: true,
+            }
+        },
+        editorConfig: {
+            lang: "en",
+            customization: {
+                about: true,
+                comments: true
+            }
+        }
+    });
+
+    // Initialize the viewer
+    const init = async () => {
+        if (viewer.init) {
+            await viewer.init(config);
+            await viewer.newFile('docx');
+        } else {
+            customElements.whenDefined('onlyoffice-viewer').then(async () => {
+                await viewer.init(config);
+                await viewer.newFile('docx');
+            });
+        }
+    };
+
+    init();
+
+    document.getElementById('btn-new-docx').addEventListener('click', () => viewer.newFile('docx'));
+    document.getElementById('btn-new-xlsx').addEventListener('click', () => viewer.newFile('xlsx'));
+    document.getElementById('btn-save').addEventListener('click', async () => {
+        const blob = await viewer.save();
+        console.log('Saved blob:', blob);
+        alert('File saved! Check console for Blob details.');
+    });
+</script>
+</body>
+</html>

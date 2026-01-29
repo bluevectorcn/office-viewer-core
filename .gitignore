@@ -3,6 +3,7 @@ node_modules
 submodules
 vendor
 dist
+dist-lib
 fonts/*.ttf
 fonts/*.otf
 wasm/x2t/x2t.js
