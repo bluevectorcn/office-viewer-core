@@ -1,7 +1,0 @@
-[submodule "submodules/onlyoffice/web-apps"]
-	path = submodules/onlyoffice/web-apps
-	url = https://github.com/ONLYOFFICE/web-apps.git
-	
-[submodule "submodules/onlyoffice/sdkjs"]
-	path = submodules/onlyoffice/sdkjs
-	url = https://github.com/ONLYOFFICE/sdkjs.git

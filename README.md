@@ -27,11 +27,9 @@ git clone <repository-url>
 
 cd office-viewer-core
 
-git submodule add https://github.com/ONLYOFFICE/web-apps.git submodules/onlyoffice/web-apps
+git clone https://github.com/ONLYOFFICE/web-apps.git submodules/onlyoffice/web-apps
 
-git submodule add https://github.com/ONLYOFFICE/sdkjs.git submodules/onlyoffice/sdkjs
-
-git submodule update --init --recursive
+git clone https://github.com/ONLYOFFICE/sdkjs.git submodules/onlyoffice/sdkjs
 
 # 安装依赖
 pnpm install
