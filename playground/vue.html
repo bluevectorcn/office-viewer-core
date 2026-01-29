@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OnlyOffice Core - Vue Playground</title>
+    <link rel="stylesheet" href="../dist-lib/style.css">
     <style>
         html, body { 
             height: 100%; 
@@ -158,7 +159,23 @@
                                 config: config,
                                 onReady: onReady,
                                 style: { height: '100%', width: '100%'}
-                            })
+                            }//, 
+                            // {
+                            //     loading: ({ status }) => h('div', {
+                            //         style: {
+                            //             background: 'rgba(52, 152, 219, 0.1)',
+                            //             border: '2px solid #3498db',
+                            //             padding: '20px',
+                            //             borderRadius: '8px',
+                            //             color: '#2980b9'
+                            //         }
+                            //     }, [
+                            //         h('div', { style: { fontWeight: 'bold' } }, 'Vue Custom Loading...'),
+                            //         h('div', status.message),
+                            //         status.progress !== undefined ? h('div', `Progress: ${status.progress}%`) : null
+                            //     ])
+                            // }
+                        )
                         ])
                     ])
                 ]);

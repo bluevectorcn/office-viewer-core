@@ -1,4 +1,4 @@
-import type { DocEditorConfig, EditorInput, ExportFormat, IEditor } from '../shared/types/EditorTypes';
+import type { DocEditorConfig, EditorInput, ExportFormat, IEditor, LoadingType } from '../shared/types/EditorTypes';
 import { OpenDocumentUseCase } from './use-cases/OpenDocumentUseCase';
 import { SaveDocumentUseCase } from './use-cases/SaveDocumentUseCase';
 import { ExportDocumentUseCase } from './use-cases/ExportDocumentUseCase';
@@ -110,60 +110,79 @@ export class EditorFactory {
 
     // 9. 实现打开文档的完整流程（包括加载 DocsAPI）
     const openDocument = async (input: EditorInput): Promise<void> => {
-      logger.info('Opening document');
-
-      // 初始化 DocsAPI 和 X2T
-      await loadDocsApi();
-      await initX2TModule();
-
-      // 使用编排器打开文档
-      await orchestrator.open(input);
-
-      // 获取会话信息
-      const session = orchestrator.getCurrentSession();
-      if (!session) {
-        throw new Error('Session not created');
-      }
-
-      // 销毁旧的编辑器实例
-      if (docEditorInstance?.destroyEditor) {
-        docEditorInstance.destroyEditor();
-      }
-
-      // 更新下载管理器
-      downloadManager.setDocId(session.docId);
-      downloadManager.setDocumentTitle(session.converted.title);
-
-      // 创建就绪 latch
-      const ready = createReadyLatch();
-
-      // 构建编辑器配置（适配 ConvertedInput 类型）
-      const convertedInput = {
-        ...session.converted,
-        blob: new Blob([]),
-        mediaData: session.converted.mediaData || {}
+      const notifyLoading = (type: LoadingType, message: string, progress?: number) => {
+        baseConfig.events?.onLoadingStatus?.({ type, message, progress });
       };
 
-      const config = buildEditorConfig(baseConfig, convertedInput, session.docId, {
-        onAppReady: ready.resolve,
-        onDocumentReady: ready.resolve,
-        onDownloadAs: (event) => downloadManager.handleDownloadAs(event),
-        onError: (error) => {
-          logger.error('OnlyOffice error', error);
+      try {
+        logger.info('Opening document');
+        notifyLoading('loading', 'Loading scripts...');
+
+        // 初始化 DocsAPI 和 X2T
+        await loadDocsApi();
+        await initX2TModule();
+
+        notifyLoading('converting', 'Processing document...');
+
+        // 使用编排器打开文档
+        await orchestrator.open(input);
+
+        // 获取会话信息
+        const session = orchestrator.getCurrentSession();
+        if (!session) {
+          throw new Error('Session not created');
         }
-      });
 
-      // 暴露配置（用于调试）
-      exposeDocEditorConfig(config);
+        // 销毁旧的编辑器实例
+        if (docEditorInstance?.destroyEditor) {
+          docEditorInstance.destroyEditor();
+        }
 
-      // 创建 DocsAPI 编辑器实例
-      docEditorInstance = new window.DocsAPI!.DocEditor(hostId, config);
-      downloadManager.setEditorInstance(docEditorInstance);
+        // 更新下载管理器
+        downloadManager.setDocId(session.docId);
+        downloadManager.setDocumentTitle(session.converted.title);
 
-      // 等待编辑器就绪
-      await ready.promise;
+        // 创建就绪 latch
+        const ready = createReadyLatch();
 
-      logger.info('Document opened and editor ready');
+        // 构建编辑器配置（适配 ConvertedInput 类型）
+        const convertedInput = {
+          ...session.converted,
+          blob: new Blob([]),
+          mediaData: session.converted.mediaData || {}
+        };
+
+        const config = buildEditorConfig(baseConfig, convertedInput, session.docId, {
+          onAppReady: ready.resolve,
+          onDocumentReady: () => {
+            ready.resolve();
+            notifyLoading('ready', 'Ready');
+          },
+          onDownloadAs: (event) => downloadManager.handleDownloadAs(event),
+          onError: (error) => {
+            logger.error('OnlyOffice error', error);
+            notifyLoading('error', `Editor error: ${JSON.stringify(error)}`);
+          }
+        });
+
+        // 暴露配置（用于调试）
+        exposeDocEditorConfig(config);
+
+        notifyLoading('initing', 'Initializing editor...');
+
+        // 创建 DocsAPI 编辑器实例
+        docEditorInstance = new window.DocsAPI!.DocEditor(hostId, config);
+        downloadManager.setEditorInstance(docEditorInstance);
+
+        // 等待编辑器就绪
+        await ready.promise;
+
+        logger.info('Document opened and editor ready');
+      } catch (error) {
+        logger.error('Failed to open document', error);
+        notifyLoading('error', error instanceof Error ? error.message : 'Unknown error');
+        throw error;
+      }
     };
 
     // 10. 实现 newFile

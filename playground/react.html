@@ -133,6 +133,33 @@
             
         };
 
+        const CustomLoading = ({ status }) => {
+            return React.createElement('div', {
+                style: {
+                    background: 'white',
+                    padding: '30px',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: '200px'
+                }
+            }, [
+                React.createElement('div', { key: 'spinner', className: 'spinner', style: {
+                    width: '30px', height: '30px', border: '3px solid #f3f3f3', borderTop: '3px solid #0071e3', borderRadius: '50%', animation: 'oo-spin 1s linear infinite'
+                }}),
+                React.createElement('div', { key: 'msg', style: { marginTop: '15px', color: '#1d1d1f', fontWeight: 600 } }, status.message),
+                status.progress !== undefined && React.createElement('div', { key: 'progress', style: { 
+                    marginTop: '10px', width: '100%', height: '4px', background: '#f5f5f7', borderRadius: '2px', overflow: 'hidden'
+                } }, 
+                    React.createElement('div', { style: { 
+                        width: `${status.progress}%`, height: '100%', background: '#0071e3', transition: 'width 0.3s'
+                    }})
+                )
+            ]);
+        };
+
         return React.createElement(
             'div', 
             { style: { display: 'flex', flexDirection: 'column', height: '100vh' } },
@@ -156,13 +183,15 @@
                     React.createElement(OnlyOfficeViewer, {
                         ref: viewerRef,
                         config: config,
+                        // loadingComponent: CustomLoading,
                         onEditorReady: (editor) => {
                             console.log('Editor Ready', editor);
                             editor.newFile('docx');
                         }
                     })
                 )
-            )
+            ),
+            React.createElement('style', null, `@keyframes oo-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`)
         );
     }
 

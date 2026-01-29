@@ -85,7 +85,31 @@
     
     <div class="main-content">
         <div class="editor-container">
-            <onlyoffice-viewer id="my-viewer"></onlyoffice-viewer>
+            <onlyoffice-viewer id="my-viewer">
+                <!-- <div slot="loading" class="custom-loader" style="
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                ">
+                    <div class="spinner"></div>
+                    <div id="loader-msg">Initializing...</div>
+                    <style>
+                        .spinner {
+                            width: 30px;
+                            height: 30px;
+                            border: 3px solid rgba(255,255,255,0.3);
+                            border-top: 3px solid white;
+                            border-radius: 50%;
+                            animation: oo-spin 1s linear infinite;
+                            margin-bottom: 10px;
+                        }
+                    </style>
+                </div> -->
+            </onlyoffice-viewer>
         </div>
     </div>
 </div>
@@ -131,6 +155,15 @@
     };
 
     init();
+
+    const loader = document.querySelector('[slot="loading"]');
+    if (loader) {
+        loader.addEventListener('loading-status', (e) => {
+            console.log('Playground received loading-status:', e.detail);
+            const msgEl = document.getElementById('loader-msg');
+            if (msgEl) msgEl.textContent = e.detail.message;
+        });
+    }
 
     document.getElementById('btn-new-docx').addEventListener('click', () => viewer.newFile('docx'));
     document.getElementById('btn-new-xlsx').addEventListener('click', () => viewer.newFile('xlsx'));

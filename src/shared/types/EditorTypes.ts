@@ -5,6 +5,14 @@ export type Mode = 'view' | 'edit';
 export type ToolbarDocked = 'top' | 'bottom';
 export type Group = string;
 
+export type LoadingType = 'loading' | 'converting' | 'initing' | 'ready' | 'error';
+
+export interface LoadingStatus {
+    type: LoadingType;
+    message: string;
+    progress?: number;
+}
+
 export interface IEditor {
   open(input: EditorInput): Promise<void>;
   newFile(format: "docx" | "xlsx" | "pptx"): Promise<void>;
@@ -291,6 +299,7 @@ export interface EventsConfig {
     onAppReady?: () => void;
     onDocumentStateChange?: (event: any) => void;
     onDocumentReady?: () => void;
+    onLoadingStatus?: (status: LoadingStatus) => void;
     onRequestEditRights?: () => void;
     onRequestHistory?: () => void;
     onRequestHistoryData?: (data: any) => void;
