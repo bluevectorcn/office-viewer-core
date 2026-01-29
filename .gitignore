@@ -3,3 +3,6 @@ node_modules
 submodules
 vendor
 dist
+fonts/*.ttf
+fonts/*.otf
+CLAUDE.md

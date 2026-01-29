@@ -30,8 +30,9 @@ export interface ISocket {
  * ```
  */
 export class SocketRegistry implements Disposable {
-  private sockets = new Map<string, WeakRef<ISocket>>();
-  private finalizationRegistry: FinalizationRegistry<string>;
+  private sockets = new Map<string, WeakRef<ISocket> | ISocket>();
+  private finalizationRegistry: FinalizationRegistry<string> | null = null;
+  private readonly useWeakRef: boolean;
   private cleanupTimer: number | null = null;
   private disposed = false;
 
@@ -39,11 +40,15 @@ export class SocketRegistry implements Disposable {
     private readonly logger: Logger = defaultLogger,
     private readonly cleanupIntervalMs: number = 60_000 // 1 分钟
   ) {
-    // 创建 FinalizationRegistry 用于自动清理
-    this.finalizationRegistry = new FinalizationRegistry((docId: string) => {
-      this.sockets.delete(docId);
-      this.logger.debug('Socket auto-cleaned from registry', { docId });
-    });
+    this.useWeakRef = typeof WeakRef !== 'undefined';
+
+    // 创建 FinalizationRegistry 用于自动清理（若环境支持）
+    if (typeof FinalizationRegistry !== 'undefined') {
+      this.finalizationRegistry = new FinalizationRegistry((docId: string) => {
+        this.sockets.delete(docId);
+        this.logger.debug('Socket auto-cleaned from registry', { docId });
+      });
+    }
 
     // 启动定期清理任务
     this.startCleanupTimer();
@@ -58,11 +63,14 @@ export class SocketRegistry implements Disposable {
       return;
     }
 
-    const weakRef = new WeakRef(socket);
-    this.sockets.set(docId, weakRef);
-
-    // 注册到 FinalizationRegistry，当 socket 被 GC 时自动清理
-    this.finalizationRegistry.register(socket, docId, socket);
+    if (this.useWeakRef) {
+      const weakRef = new WeakRef(socket);
+      this.sockets.set(docId, weakRef);
+      // 注册到 FinalizationRegistry，当 socket 被 GC 时自动清理
+      this.finalizationRegistry?.register(socket, docId, socket);
+    } else {
+      this.sockets.set(docId, socket);
+    }
 
     this.logger.debug('Socket registered', { docId, totalSockets: this.sockets.size });
   }
@@ -74,7 +82,7 @@ export class SocketRegistry implements Disposable {
     const removed = this.sockets.delete(docId);
 
     if (socket) {
-      this.finalizationRegistry.unregister(socket);
+      this.finalizationRegistry?.unregister(socket);
     }
 
     if (removed) {
@@ -91,7 +99,11 @@ export class SocketRegistry implements Disposable {
       return undefined;
     }
 
-    const socket = ref.deref();
+    if (!this.useWeakRef) {
+      return ref as ISocket;
+    }
+
+    const socket = (ref as WeakRef<ISocket>).deref();
     if (!socket) {
       // Socket 已被 GC，清理引用
       this.sockets.delete(docId);
@@ -149,7 +161,15 @@ export class SocketRegistry implements Disposable {
     const validIds: string[] = [];
 
     for (const [docId, ref] of this.sockets) {
-      const socket = ref.deref();
+      if (!this.useWeakRef) {
+        const socket = ref as ISocket;
+        if (socket.connected) {
+          validIds.push(docId);
+        }
+        continue;
+      }
+
+      const socket = (ref as WeakRef<ISocket>).deref();
       if (socket) {
         validIds.push(docId);
       }
@@ -180,7 +200,14 @@ export class SocketRegistry implements Disposable {
     const toDelete: string[] = [];
 
     for (const [docId, ref] of this.sockets) {
-      if (!ref.deref()) {
+      if (!this.useWeakRef) {
+        if (!(ref as ISocket).connected) {
+          toDelete.push(docId);
+        }
+        continue;
+      }
+
+      if (!(ref as WeakRef<ISocket>).deref()) {
         toDelete.push(docId);
       }
     }

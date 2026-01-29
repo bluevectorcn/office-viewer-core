@@ -159,14 +159,7 @@ export class MediaCache<T = any> implements Disposable {
       return false;
     }
 
-    this.cache.delete(key);
-    this.currentSize -= entry.size;
-
-    // 从访问队列中移除
-    const index = this.accessOrder.indexOf(key);
-    if (index !== -1) {
-      this.accessOrder.splice(index, 1);
-    }
+    this.evictEntry(key, entry);
 
     return true;
   }
@@ -251,17 +244,7 @@ export class MediaCache<T = any> implements Disposable {
       return;
     }
 
-    this.cache.delete(oldestKey);
-    this.currentSize -= entry.size;
-
-    // 触发驱逐回调
-    if (this.onEvict) {
-      try {
-        this.onEvict(oldestKey, entry.value);
-      } catch (error) {
-        console.error('Error in eviction callback:', error);
-      }
-    }
+    this.evictEntry(oldestKey, entry);
   }
 
   /**
@@ -292,5 +275,28 @@ export class MediaCache<T = any> implements Disposable {
    */
   get isDisposed(): boolean {
     return this.disposed;
+  }
+
+  /**
+   * 驱逐指定条目（统一入口，确保触发回调并清理队列/大小）
+   */
+  private evictEntry(key: string, entry: CacheEntry<T>): void {
+    this.cache.delete(key);
+    this.currentSize -= entry.size;
+
+    // 从访问队列中移除
+    const index = this.accessOrder.indexOf(key);
+    if (index !== -1) {
+      this.accessOrder.splice(index, 1);
+    }
+
+    // 触发驱逐回调
+    if (this.onEvict) {
+      try {
+        this.onEvict(key, entry.value);
+      } catch (error) {
+        console.error('Error in eviction callback:', error);
+      }
+    }
   }
 }

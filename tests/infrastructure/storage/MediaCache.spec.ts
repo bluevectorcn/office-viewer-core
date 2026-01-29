@@ -113,6 +113,22 @@ describe('MediaCache', () => {
       vi.useRealTimers();
     });
 
+    it('should trigger eviction callback on TTL expiration', () => {
+      vi.useFakeTimers();
+
+      const onEvict = vi.fn();
+      const ttlCache = new MediaCache({ maxSize: 1024, ttl: 1000, onEvict });
+      ttlCache.set('key1', 'value1', 100);
+
+      vi.advanceTimersByTime(1100);
+
+      // access to trigger TTL eviction
+      expect(ttlCache.get('key1')).toBeUndefined();
+      expect(onEvict).toHaveBeenCalledWith('key1', 'value1');
+
+      vi.useRealTimers();
+    });
+
     it('should not expire when TTL is 0', () => {
       const noTtlCache = new MediaCache({ maxSize: 1024, ttl: 0 });
       noTtlCache.set('key1', 'value1', 100);
@@ -171,6 +187,16 @@ describe('MediaCache', () => {
 
     it('should return false for non-existent key', () => {
       expect(cache.delete('non-existent')).toBe(false);
+    });
+
+    it('should trigger eviction callback when deleting', () => {
+      const onEvict = vi.fn();
+      const callbackCache = new MediaCache({ maxSize: 1024, onEvict });
+      callbackCache.set('key1', 'value1', 100);
+
+      callbackCache.delete('key1');
+
+      expect(onEvict).toHaveBeenCalledWith('key1', 'value1');
     });
   });
 

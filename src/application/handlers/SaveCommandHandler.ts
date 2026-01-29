@@ -31,6 +31,8 @@ const chunkedUploader = new ChunkedUploader(logger);
 
 // 保留旧的 Map 用于存储会话元数据（不包含 chunks）
 const sessionMetadata = new Map<string, Omit<SaveSession, 'chunks'>>();
+const sessionTimers = new Map<string, number>();
+const SESSION_TTL_MS = 5 * 60 * 1000; // 与 ChunkedUploader 默认 TTL 保持一致
 
 type InternalDownloadFlag = {
   docId: string;
@@ -44,6 +46,24 @@ function debugLog(...args: unknown[]) {
   } catch {
     // Ignore logging failures.
   }
+}
+
+function clearSessionTimer(savekey: string) {
+  const timer = sessionTimers.get(savekey);
+  if (timer) {
+    clearTimeout(timer);
+    sessionTimers.delete(savekey);
+  }
+}
+
+function scheduleSessionCleanup(savekey: string) {
+  clearSessionTimer(savekey);
+  const timer = window.setTimeout(() => {
+    sessionMetadata.delete(savekey);
+    sessionTimers.delete(savekey);
+    logger.warn('Save session expired', { savekey, ttl: SESSION_TTL_MS });
+  }, SESSION_TTL_MS);
+  sessionTimers.set(savekey, timer);
 }
 
 export function shouldInterceptUrl(targetWindow: Window, rawUrl: string) {
@@ -426,13 +446,18 @@ async function handleSaveCommand(
   if (savetype === saveTypes.first) {
     const savekey = createId("savekey");
     // 使用 ChunkedUploader 处理第一个分块
-    await chunkedUploader.handleChunk(savekey, bytes, 'first');
+    const firstResult = await chunkedUploader.handleChunk(savekey, bytes, 'first');
+    if (firstResult.status === 'error') {
+      logger.error('Failed to start chunked upload', firstResult.message);
+      return buildResponse(cmd, createId("savekey-error"), outputExt);
+    }
     // 保存会话元数据（不包含 chunks）
     sessionMetadata.set(savekey, {
       docId,
       savekey,
       cmd,
     });
+    scheduleSessionCleanup(savekey);
     return buildResponse(cmd, savekey, outputExt);
   }
 
@@ -444,13 +469,21 @@ async function handleSaveCommand(
 
   if (savetype === saveTypes.middle) {
     // 使用 ChunkedUploader 处理中间分块
-    await chunkedUploader.handleChunk(session.savekey, bytes, 'middle');
+    const middleResult = await chunkedUploader.handleChunk(session.savekey, bytes, 'middle');
+    if (middleResult.status === 'error') {
+      logger.error('Failed to append chunked upload', middleResult.message);
+      sessionMetadata.delete(session.savekey);
+      clearSessionTimer(session.savekey);
+      return buildResponse(cmd, createId("savekey-error"), outputExt);
+    }
+    scheduleSessionCleanup(session.savekey);
     return buildResponse(cmd, session.savekey, outputExt);
   }
 
   // 处理最后一个分块，获取合并后的数据
   const result = await chunkedUploader.handleChunk(session.savekey, bytes, 'last');
   sessionMetadata.delete(session.savekey);
+  clearSessionTimer(session.savekey);
 
   if (result.status === 'error' || !result.data) {
     logger.error('Failed to finalize chunked upload', result.message);

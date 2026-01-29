@@ -228,7 +228,7 @@ export interface CustomizationConfig {
     // trackChanges: duplicate in review
     hideRulers?: boolean;
     hideNotes?: boolean;
-    uiTheme?: string;
+    uiTheme?: OfficeTheme;
     integrationMode?: string;
     pointerMode?: 'select' | 'hand';
     mobile?: {
@@ -359,6 +359,14 @@ export interface EmbeddedConfig extends DocEditorConfig {
         onBack?: () => void;
     };
 }
+
+export type OfficeTheme =
+  | "theme-light"
+  | "theme-classic-light"
+  | "theme-white"
+  | "theme-dark"
+  | "theme-night"
+  | "theme-contrast-dark";
 
 export const enum AvsFileType {
   AVS_FILE_UNKNOWN = 0x0000,
