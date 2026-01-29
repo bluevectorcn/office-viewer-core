@@ -17,21 +17,6 @@
 - **Git**: 用于管理 submodules
 - **Docker**: (可选) 用于生成自定义字体
 
-## 自定义字体与 WASM
-
-只有在需要集成自定义字体时才需要执行此步骤。
-
-1. **添加字体**：将您的字体文件（.ttf, .otf）放入项目根目录下的 `fonts/` 目录中。
-2. **构建**：运行 `pnpm build:onlyoffice`。脚本会自动检测 `fonts/` 目录，如果存在文件，将调用 Docker 容器 `jacktea/allfontsgen` 生成字体配置并集成到构建产物中。
-3. **生成的产物**：
-    - `AllFonts.js`, `font_selection.bin` -> `vendor/onlyoffice/sdkjs/common/`
-    - 缩略图 -> `vendor/onlyoffice/sdkjs/common/Images/`
-    - 字体文件 -> `vendor/onlyoffice/fonts/`
-
-此外，项目根目录 `wasm/x2t` 下的文件也会被自动拷贝到 `vendor/onlyoffice/x2t`。
-
-所有 `js`, `css`, `wasm` 资源在构建时会自动进行 Brotli (.br) 压缩。
-
 ## 快速开始
 
 ### 1. 初始化项目
@@ -45,6 +30,22 @@ git submodule update --init --recursive
 # 安装依赖
 pnpm install
 ```
+
+- **添加字体**
+
+1. **添加字体**：将您的字体文件（.ttf, .otf）放入项目根目录下的 `fonts/` 目录中。
+2. **构建**：运行 `pnpm build:onlyoffice`。脚本会自动检测 `fonts/` 目录，如果存在文件，将调用 Docker 容器 `jacktea/allfontsgen` 生成字体配置并集成到构建产物中。
+3. **生成的产物**：
+    - `AllFonts.js`, `font_selection.bin` -> `vendor/onlyoffice/sdkjs/common/`
+    - 缩略图 -> `vendor/onlyoffice/sdkjs/common/Images/`
+    - 字体文件 -> `vendor/onlyoffice/fonts/`
+
+- **添加 wasm**
+
+1. 下载x2t：https://github.com/cryptpad/onlyoffice-x2t-wasm/releases
+2. 拷贝 x2t.js 和 x2t.wasm 到项目根目录 `wasm/x2t` 下。
+3. 也可自行基于 https://github.com/cryptpad/onlyoffice-x2t-wasm 进行编译。
+
 
 ### 2. 构建 OnlyOffice 运行时
 
