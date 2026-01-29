@@ -1,123 +1,150 @@
-# OnlyOffice WASM Core Kernel
+# OnlyOffice WASM Core (onlyoffice-core)
 
-WASM-only OnlyOffice component kernel (front-end black box) designed for React/Vue wrappers. This project loads OnlyOffice `web-apps` via an iframe from `vendor/` and injects a global `window.io` FakeSocket to avoid any backend dependency.
+这是一个基于 WebAssembly (WASM) 的 OnlyOffice 核心组件，旨在提供一个纯前端、无后端依赖的文档编辑黑盒。它可以轻松集成到 React、Vue 或其他前端框架中。
 
-## Requirements
+## 核心特性
 
-- Node.js 18+
-- pnpm 9+
-- git (for submodule)
+- **零后端依赖**：通过注入全局 `window.io` (FakeSocket) 拦截网络请求，实现纯前端运行。
+- **WASM 驱动**：利用 OnlyOffice `web-apps` 和 `x2t` 的 WASM 版本进行高效的文档处理和转换。
+- **现代架构**：采用 Clean Architecture 设计模式，解耦业务逻辑、应用用例和基础设施实现。
+- **全能编辑**：支持 DOCX, XLSX, PPTX 的在线编辑，以及多格式（PDF, DOCX 等）的导出。
+- **灵活部署**：支持自定义静态资源前缀（`assetsPrefix`），适配各种 CDN 和静态服务器布局。
 
-## Quick Start
+## 环境要求
+
+- **Node.js**: 24.12.0+ (建议使用最新版本)
+- **pnpm**: 9.12.3+
+- **Git**: 用于管理 submodules
+
+## 快速开始
+
+### 1. 初始化项目
 
 ```bash
+# 克隆仓库并初始化子模块
+git clone <repository-url>
+cd onlyoffice-core
 git submodule update --init --recursive
+
+# 安装依赖
 pnpm install
+```
+
+### 2. 构建 OnlyOffice 运行时
+
+该步骤会将子模块中的源码编译并同步到 `vendor/` 目录中：
+
+```bash
 pnpm build:onlyoffice
+```
+
+### 3. 运行开发服务器
+
+```bash
 pnpm dev
 ```
 
-Open the dev server URL shown in the terminal. The demo page loads the OnlyOffice Document Editor and can open a mock `.docx` file.
+访问浏览器中显示的开发地址即可预览 DEMO。
 
-## Project Structure
+## 项目架构
 
-```
-onlyoffice-core/
-├─ submodules/onlyoffice/web-apps/   # OnlyOffice web-apps source (git submodule)
-├─ submodules/onlyoffice/sdkjs/      # OnlyOffice sdkjs source (git submodule)
-├─ vendor/onlyoffice/web-apps/       # Built runtime assets served by iframe
-├─ vendor/onlyoffice/x2t/            # x2t.wasm + x2t.js (Emscripten glue)
-├─ src/                              # Core API, bootstrap, fake socket, IO, demo
-├─ scripts/build-onlyoffice.ts       # Submodule -> vendor build sync
-└─ ...
-```
+项目遵循简洁的领域驱动设计 (DDD) 理念：
 
-## Core API
-
-```ts
-interface OnlyOfficeEditor {
-  open(input: File | Blob | ArrayBuffer | string): Promise<void>;
-  save(): Promise<Blob>;
-  export(format: "pdf" | "docx" | "xlsx" | "pptx"): Promise<Blob>;
-  destroy(): void;
-}
-
-export function createEditor(
-  container: HTMLElement,
-  config: DocEditorConfig
-): OnlyOfficeEditor;
+```text
+src/
+├── application/          # 应用层：包含用例 (Use Cases)、编排器 (Orchestrator) 和工厂 (Factory)
+│   ├── use-cases/        # 具体业务流程：打开、保存、导出
+│   ├── config/           # 编辑器配置构建逻辑
+│   └── adapters/         # 接口适配器
+├── domain/               # 领域层：核心业务实体 (EditorState) 和逻辑
+├── infrastructure/       # 基础设施层：外部集成 (DOM, Socket, 转换服务)
+│   ├── conversion/       # x2t WASM 转换服务封装
+│   ├── socket/           # FakeSocket 实现
+│   └── external/         # 第三方脚本加载 (DocsAPI)
+├── shared/               # 共享层：通用类型、常量和工具函数
+└── main.ts               # Demo 入口
 ```
 
-### Assets Prefix (Deployment-Friendly)
+## API 使用说明
 
-The component now loads both `api.js` and `x2t.js` from a configurable
-static assets prefix.
+### 创建编辑器
 
-- Default prefix: `/vendor/onlyoffice`
-- Config field: `assetsPrefix`
+```typescript
+import { createEditor } from "./application/EditorFactory";
+import { createBaseConfig } from "./application/config/EditorConfigBuilder";
 
-Example:
+const container = document.getElementById("editor-container");
 
-```ts
-import { createBaseConfig } from "./src/core/config";
-
+// 1. 创建基础配置
 const config = createBaseConfig({
-  assetsPrefix: "/static/onlyoffice",
+  assetsPrefix: "/vendor/onlyoffice", // 静态资源路径
+  editorConfig: {
+    lang: "zh",
+    customization: {
+      about: false,
+      // ... 更多自定义配置
+    }
+  }
 });
 
-createEditor(container, config);
+// 2. 初始化编辑器
+const editor = createEditor(container, config);
+
+// 3. 打开文档 (支持 File, Blob, ArrayBuffer 或 URL)
+await editor.open(fileBlob);
 ```
 
-### Static Deployment Example (Nginx)
+### IEditor 接口
 
-Map your static files so that the chosen `assetsPrefix` points at
-`vendor/onlyoffice`:
+`createEditor` 返回一个实现了 `IEditor` 接口的对象：
+
+| 方法 | 描述 |
+| :--- | :--- |
+| `open(input)` | 打开文档，支持 `File`, `Blob`, `ArrayBuffer` 或远程 `URL` |
+| `newFile(format)` | 创建并打开新文件，支持 `'docx'`, `'xlsx'`, `'pptx'` |
+| `save()` | 将当前编辑的内容保存并返回 `Promise<Blob>` (DOCX 格式) |
+| `export(format)` | 导出到特定格式，支持 `'pdf'`, `'docx'`, `'xlsx'`, `'pptx'` |
+| `destroy()` | 销毁编辑器实例，清理内存并移除 DOM 元素 |
+
+## 静态部署指南
+
+由于使用了 SharedArrayBuffer 等 WASM 特性，部署时需要配置相应的 HTTP Header，且必须工作在安全上下文 (HTTPS) 下。
+
+### Nginx 配置示例
 
 ```nginx
-# assetsPrefix: /static/onlyoffice
-location /static/onlyoffice/ {
-  alias /path/to/onlyoffice-core/vendor/onlyoffice/;
-  add_header Cross-Origin-Opener-Policy same-origin;
-  add_header Cross-Origin-Embedder-Policy require-corp;
-  add_header Access-Control-Allow-Origin *;
+server {
+    listen 443 ssl;
+    # ... SSL 配置
+
+    location /vendor/onlyoffice/ {
+        alias /path/to/onlyoffice-core/vendor/onlyoffice/;
+        
+        # 必须：开启跨域隔离
+        add_header Cross-Origin-Opener-Policy same-origin;
+        add_header Cross-Origin-Embedder-Policy require-corp;
+        
+        # 允许跨域请求
+        add_header Access-Control-Allow-Origin *;
+    }
 }
 ```
 
-## Build OnlyOffice (Black Box)
+## 开发者脚本
 
-OnlyOffice is built from the submodule and then synced into `vendor/onlyoffice/web-apps/`.
+- `pnpm dev`: 启动 Vite 开发服务器。
+- `pnpm build`: 打包应用代码。
+- `pnpm build:onlyoffice`: 从子模块构建 ONLYOFFICE 静态资源。
+- `pnpm test`: 运行单元测试 (Vitest)。
+- `pnpm lint`: 代码质量检查。
+- `pnpm type-check`: TypeScript 类型检查。
 
-```bash
-pnpm build:onlyoffice
-```
+## 详细配置参考
 
-Environment overrides (optional):
+配置系统基于 `DocEditorConfig`，主要包含以下部分：
 
-- `ONLYOFFICE_PM`: `npm` or `yarn` (default: `npm`)
-- `ONLYOFFICE_BUILD_OUTPUT`: relative or absolute path to build output directory
+- `assetsPrefix`: 必填。指向 `vendor/onlyoffice` 的部署路径。
+- `document`: 文档元数据和权限配置（如 `edit: true`）。
+- `editorConfig`: 编辑器界面定制、语言设置等。
 
-## Upgrade OnlyOffice (Official Flow)
-
-1. Update the submodule to the desired tag/commit:
-
-```bash
-cd submodules/onlyoffice/web-apps
-# Example: tag v9.3.0.67
-# git fetch --tags
-# git checkout v9.3.0.67
-cd ../../
-```
-
-2. Rebuild and sync to vendor:
-
-```bash
-pnpm build:onlyoffice
-```
-
-3. Update the metadata in `package.json` if needed.
-
-## Notes
-
-- The iframe loads only `/vendor/onlyoffice/web-apps/apps/documenteditor/main/index.html`.
-- `window.io` is injected before the iframe loads; no socket.io-client dependency is used.
-- x2t is loaded from `<assetsPrefix>/x2t/x2t.js` and `<assetsPrefix>/x2t/x2t.wasm`.
+详情请参考 `src/shared/types/EditorTypes.ts`。
