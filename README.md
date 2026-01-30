@@ -14,7 +14,7 @@
 
 - **Node.js**: 24.12.0+ (建议使用最新版本)
 - **pnpm**: 9.12.3+
-- **Git**: 用于管理 submodules
+- **Git**: 用于下载 OnlyOffice 源码
 - **Docker**: (可选) 用于生成自定义字体
 
 ## 快速开始
@@ -22,17 +22,23 @@
 ### 1. 初始化项目
 
 ```bash
-# 克隆仓库并初始化子模块
+# 克隆仓库
 git clone <repository-url>
-
 cd office-viewer-core
-
-git clone https://github.com/ONLYOFFICE/web-apps.git submodules/onlyoffice/web-apps
-
-git clone https://github.com/ONLYOFFICE/sdkjs.git submodules/onlyoffice/sdkjs
 
 # 安装依赖
 pnpm install
+```
+
+#### 1.1 构建 OnlyOffice 运行时
+
+该步骤会自动按需下载 `package.json` 中指定的 OnlyOffice 源码并进行编译，最后同步到 `vendor/` 目录中：
+
+> [!NOTE]
+> 脚本会使用 `git clone --depth 1` 下载指定版本的 Tag，以节省磁盘空间。
+
+```bash
+pnpm build:onlyoffice
 ```
 
 #### 1.1 添加字体
@@ -43,14 +49,6 @@ pnpm install
 
 - 下载x2t：https://github.com/cryptpad/onlyoffice-x2t-wasm/releases(建议使用7.3的版本), 也可自行基于 https://github.com/cryptpad/onlyoffice-x2t-wasm 进行编译
 - 拷贝 x2t.js 和 x2t.wasm 到项目根目录 `wasm/x2t` 下。
-
-### 2. 构建 OnlyOffice 运行时
-
-该步骤会将子模块中的源码编译并同步到 `vendor/` 目录中：
-
-```bash
-pnpm build:onlyoffice
-```
 
 编译库, `playground` 使用
 

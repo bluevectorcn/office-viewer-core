@@ -40,29 +40,43 @@ function run(command: string, args: string[], cwd: string, extraEnv = {}): numbe
   return result.status ?? 1;
 }
 
-function syncSubmodule(dir: string, version: string) {
-  if (!version || !fs.existsSync(dir)) return;
-  console.log(`Syncing submodule at ${path.relative(rootDir, dir)} to v${version}...`);
-  
-  // 获取最新代码和标签
-  spawnSync("git", ["fetch", "--all", "--tags", "--force"], { cwd: dir });
-  
-  // 重置任何可能的修改
-  spawnSync("git", ["checkout", "."], { cwd: dir });
-  spawnSync("git", ["clean", "-fd"], { cwd: dir });
-  
-  const tags = [`v${version}`, version];
-  let success = false;
-  for (const tag of tags) {
-    if (spawnSync("git", ["checkout", tag], { cwd: dir }).status === 0) {
-      console.log(`Successfully checked out ${tag} in ${path.relative(rootDir, dir)}`);
-      success = true;
-      break;
-    }
+function syncSubmodule(repoUrl: string, dir: string, version: string) {
+  if (!version) return;
+  const parentDir = path.dirname(dir);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
   }
 
-  if (!success) {
-    console.warn(`Warning: Could not checkout version ${version} in ${path.relative(rootDir, dir)}.`);
+  const tag = `v${version}`;
+  
+  if (!fs.existsSync(dir)) {
+    console.log(`Cloning ${repoUrl} to ${path.relative(rootDir, dir)} at tag ${tag}...`);
+    const cloneResult = spawnSync("git", ["clone", "--depth", "1", "--branch", tag, repoUrl, dir], { stdio: "inherit" });
+    if (cloneResult.status !== 0) {
+      console.error(`Failed to clone ${repoUrl} at version ${tag}.`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  console.log(`Checking version for ${path.relative(rootDir, dir)}...`);
+  
+  // 检查当前是否已经在该 tag
+  const currentStatus = spawnSync("git", ["describe", "--tags", "--exact-match"], { cwd: dir, encoding: "utf-8" });
+  if (currentStatus.status === 0 && currentStatus.stdout.trim() === tag) {
+    console.log(`${path.relative(rootDir, dir)} is already at ${tag}.`);
+  } else {
+    console.log(`Updating ${path.relative(rootDir, dir)} to ${tag}...`);
+    // 获取最新标签
+    spawnSync("git", ["fetch", "--tags", "--depth", "1", "origin", tag], { cwd: dir });
+    spawnSync("git", ["checkout", "."], { cwd: dir });
+    spawnSync("git", ["clean", "-fd"], { cwd: dir });
+    
+    if (spawnSync("git", ["checkout", tag], { cwd: dir }).status !== 0) {
+      console.warn(`Warning: Could not checkout version ${tag} in ${path.relative(rootDir, dir)}.`);
+    } else {
+      console.log(`Successfully checked out ${tag} in ${path.relative(rootDir, dir)}`);
+    }
   }
 }
 
@@ -134,11 +148,11 @@ function moveOutput(source: string, target: string) {
 
 // --- Main Flow ---
 
-ensureSubmodule(submoduleDir);
-ensureSubmodule(sdkjsDir);
+const WEB_APPS_REPO = "https://github.com/ONLYOFFICE/web-apps.git";
+const SDK_JS_REPO = "https://github.com/ONLYOFFICE/sdkjs.git";
 
-syncSubmodule(submoduleDir, fullVersion);
-syncSubmodule(sdkjsDir, fullVersion);
+syncSubmodule(WEB_APPS_REPO, submoduleDir, fullVersion);
+syncSubmodule(SDK_JS_REPO, sdkjsDir, fullVersion);
 
 patchOnlyOfficeConfigs();
 

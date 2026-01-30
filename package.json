@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "onlyoffice": {
-    "version": "9.3.0.67",
+    "version": "9.3.0.74",
     "submodule": "submodules/onlyoffice/web-apps",
     "sdkjsSubmodule": "submodules/onlyoffice/sdkjs"
   },
