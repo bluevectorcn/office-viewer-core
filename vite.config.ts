@@ -102,6 +102,9 @@ function staticCopyPlugin() {
   };
 }
 
+import react from "@vitejs/plugin-react";
+import vue from "@vitejs/plugin-vue";
+
 const pkgPath = path.join(rootDir, "package.json");
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
 const fullVersion = pkg.onlyoffice?.version || "9.3.0.1";
@@ -127,7 +130,7 @@ export default defineConfig({
       "Access-Control-Allow-Origin": "*",
     },
   },
-  plugins: [staticCopyPlugin()],
+  plugins: [react(), vue(), staticCopyPlugin()],
   build: {
     rollupOptions: {
       input: {
@@ -143,7 +146,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(__dirname, './src'),
+      'office-viewer-core/react': path.resolve(__dirname, './src/react.ts'),
+      'office-viewer-core/vue': path.resolve(__dirname, './src/vue.ts'),
+      'office-viewer-core/web-component': path.resolve(__dirname, './src/web-component.ts'),
+      'office-viewer-core': path.resolve(__dirname, './src/index.ts'),
     }
   }
 });
