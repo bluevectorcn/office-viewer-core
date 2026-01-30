@@ -150,47 +150,61 @@ server {
 
 ## NPM 包集成指南
 
-本项目可以作为 npm 包被第三方系统集成。
+本项目已发布至 NPM，支持作为依赖集成到您的前端项目中。
 
-### 安装
+### 1. 安装
 
 ```bash
-npm install office-viewer-core
-# 或
 pnpm add office-viewer-core
+# 或
+npm install office-viewer-core
 ```
 
-### 1. Web Component 集成
+### 2. 重要：静态资源配置
+
+由于 OnlyOffice 核心是一个复杂的二进制黑盒，它需要大量的静态资源（WASM, Workers, JS 插件）。
+
+**您必须确保 `vendor/onlyoffice` 目录下的内容被部署到您的静态服务器或 CDN 上，并能被浏览器通过 URL 访问。**
+
+- 在 Vite 项目中，您可以将 `vendor/onlyoffice` 拷贝到 `public/vendor/onlyoffice`。
+- 在部署时，请确保配置了正确的 [跨域隔离与 Nginx 响应头](#静态部署指南)。
+
+---
+
+### 3. 集成示例
+
+#### Web Component (通用)
 
 适用于所有现代 Web 框架或原生 HTML/JS 项目。
 
 ```html
-<!-- index.html -->
 <script type="module">
-  // 引入 Web Component 定义
   import 'office-viewer-core/web-component';
+  // 必须引入基础样式（包含编辑器容器排版）
+  import 'office-viewer-core/dist-lib/style.css';
   import { createBaseConfig } from 'office-viewer-core';
 
   const viewer = document.getElementById('viewer');
   const config = createBaseConfig({
+    // 指向您部署的静态资源路径
     assetsPrefix: '/vendor/onlyoffice', 
     editorConfig: { lang: 'zh' }
   });
   
-  // 初始化
   viewer.init(config).then(() => {
     viewer.newFile('docx');
   });
 </script>
 
-<onlyoffice-viewer id="viewer"></onlyoffice-viewer>
+<onlyoffice-viewer id="viewer" style="height: 600px; display: block;"></onlyoffice-viewer>
 ```
 
-### 2. React 集成
+#### React 集成
 
 ```tsx
 import { OnlyOfficeViewer } from 'office-viewer-core/react';
 import { createBaseConfig } from 'office-viewer-core';
+import 'office-viewer-core/dist-lib/style.css';
 
 function App() {
   const config = createBaseConfig({
@@ -199,21 +213,24 @@ function App() {
   });
 
   return (
-    <div style={{ height: '600px' }}>
+    <div style={{ height: '800px', width: '100%' }}>
       <OnlyOfficeViewer 
         config={config} 
-        onEditorReady={(editor) => console.log('Ready', editor)} 
+        onEditorReady={(editor) => {
+          console.log('编辑器已就绪', editor);
+          editor.newFile('docx');
+        }} 
       />
     </div>
   );
 }
 ```
 
-### 3. Vue 集成
+#### Vue 3 集成
 
-```tsx
+```vue
 <template>
-  <div style="height: 600px">
+  <div style="height: 800px; width: 100%">
     <OnlyOfficeViewer :config="config" @ready="onReady" />
   </div>
 </template>
@@ -221,6 +238,7 @@ function App() {
 <script setup>
 import { OnlyOfficeViewer } from 'office-viewer-core/vue';
 import { createBaseConfig } from 'office-viewer-core';
+import 'office-viewer-core/dist-lib/style.css';
 
 const config = createBaseConfig({
   assetsPrefix: '/vendor/onlyoffice',
@@ -228,7 +246,8 @@ const config = createBaseConfig({
 });
 
 const onReady = (editor) => {
-  console.log('Editor ready', editor);
+  console.log('编辑器已就绪', editor);
+  editor.newFile('xlsx');
 };
 </script>
 ```
@@ -248,10 +267,12 @@ const onReady = (editor) => {
 
 - `pnpm dev`: 启动 Vite 开发服务器。
 - `pnpm build`: 打包应用代码。
+- `pnpm build:lib`: 打包库代码供 NPM 使用 (输出到 `dist-lib`)。
 - `pnpm build:onlyoffice`: 从子模块构建 ONLYOFFICE 静态资源。
 - `pnpm test`: 运行单元测试 (Vitest)。
 - `pnpm lint`: 代码质量检查。
 - `pnpm type-check`: TypeScript 类型检查。
+
 
 ## 详细配置参考
 
