@@ -369,6 +369,15 @@ export interface EmbeddedConfig extends DocEditorConfig {
     };
 }
 
+export interface Participant {
+  id: string;
+  username: string;
+  group?: string;
+  indexUser: number;
+  isLiveViewer?: boolean;
+  view: boolean;
+}
+
 export type OfficeTheme =
   | "theme-light"
   | "theme-classic-light"

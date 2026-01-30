@@ -307,23 +307,30 @@ export class FakeSocket {
       }
     }
 
-    const user = message.user;
-    if (user && typeof user === "object") {
-      const userId = (user as { id?: string | number }).id;
-      if (userId !== undefined && userId !== null) {
-        this.userId = String(userId);
-      }
+    const user = message.user as { 
+      id?: string | number; 
+      username?: string;
+      indexUser?: number;
+     };
+    if (user) {
+      this.userId = String(user.id);
     }
 
     const sessionId = message.sessionId;
     if (typeof sessionId === "string" && sessionId) {
       this.sessionId = sessionId;
     }
+    const indexUser = user?.indexUser ?? 0;
 
-    const indexUser =
-      user && typeof user === "object" && typeof (user as { indexUser?: number }).indexUser === "number"
-        ? (user as { indexUser?: number }).indexUser
-        : 0;
+    // 协作者，indexUser == -1 时可设置为空
+    const participants = [
+      {
+        "id": this.userId ,
+        "username": user?.username ?? "user user",
+        indexUser,
+        "view": false  
+      }
+    ];
 
     this.emitLocal("message", {
       type: "auth",
@@ -331,7 +338,7 @@ export class FakeSocket {
       sessionId: this.sessionId,
       indexUser,
       sessionTimeConnect: Date.now(),
-      participants: [],
+      participants,
       buildVersion: __ONLYOFFICE_VERSION__,
       buildNumber: __ONLYOFFICE_BUILD_NUMBER__,
     });
