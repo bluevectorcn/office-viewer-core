@@ -24,7 +24,6 @@ const baseConfig: DocEditorConfig = createBaseConfig({
       download: true,
       fillForms: true,
       review: true,
-      comment: true,
       modifyFilter: false,
       modifyContentControl: false,
       chat: false,
@@ -33,7 +32,7 @@ const baseConfig: DocEditorConfig = createBaseConfig({
   editorConfig: {
     lang: "zh",
     customization: {
-      about: false,
+      about: true,
       comments: false,
       features: {
         spellcheck: false,

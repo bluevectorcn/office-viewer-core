@@ -63,6 +63,39 @@ function installIframeIoPatch(targetWindow: Window) {
   };
 }
 
+/**
+ * 运行时修复 Button.js Bug
+ *
+ * Button.prototype.updateHint 和 createHint 缺失对 hint 的空值检查。
+ * 当 lang!=en 时，部分按钮（如评论按钮）的提示文字可能为 undefined，导致尝试读取 hint[0] 时崩溃。
+ */
+function installButtonPatch(targetWindow: Window) {
+  const win = targetWindow as any;
+  const patch = () => {
+    const Button = win.Common?.UI?.Button;
+    if (Button && Button.prototype && !Button.prototype.__patched) {
+      const originalUpdateHint = Button.prototype.updateHint;
+      Button.prototype.updateHint = function (this: any, hint: any, isHtml: boolean) {
+        // 防御性处理：如果 hint 为空，转为空字符串防止 hint[0] 报错
+        const safeHint = hint === undefined || hint === null ? "" : hint;
+        return originalUpdateHint.call(this, safeHint, isHtml);
+      };
+
+      const originalCreateHint = Button.prototype.createHint;
+      Button.prototype.createHint = function (this: any, hint: any, isHtml: boolean) {
+        const safeHint = hint === undefined || hint === null ? (this.options?.hint || "") : hint;
+        return originalCreateHint.call(this, safeHint, isHtml);
+      };
+
+      Button.prototype.__patched = true;
+    } else if (!Button) {
+      // 轮询直到 Common.UI.Button 被加载（OnlyOffice 内部是异步加载组件的）
+      setTimeout(patch, 50);
+    }
+  };
+  patch();
+}
+
 export function injectGlobals(targetWindow: Window = window) {
   if (injectedWindows.has(targetWindow)) return;
   if (targetWindow === window) {
@@ -70,6 +103,7 @@ export function injectGlobals(targetWindow: Window = window) {
   }
 
   installLocalEndpointPatch(targetWindow);
+  installButtonPatch(targetWindow);
 
   const globalWindow = targetWindow as typeof window & {
     io?: (options?: unknown) => FakeSocket;

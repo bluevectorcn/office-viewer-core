@@ -52,6 +52,12 @@ pnpm install
 pnpm build:onlyoffice
 ```
 
+编译库, `playground` 使用
+
+```bash
+pnpm build:lib
+```
+
 ### 3. 运行开发服务器
 
 ```bash
