@@ -47,7 +47,7 @@ pnpm build:onlyoffice
 
 #### 1.2 添加 wasm
 
-- 下载x2t：https://github.com/cryptpad/onlyoffice-x2t-wasm/releases(建议使用7.3的版本), 也可自行基于 https://github.com/cryptpad/onlyoffice-x2t-wasm 进行编译
+- 下载x2t：[这里](https://github.com/cryptpad/onlyoffice-x2t-wasm/releases) (建议使用7.3的版本), 也可自行基于 [onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) 进行编译
 - 拷贝 x2t.js 和 x2t.wasm 到项目根目录 `wasm/x2t` 下。
 
 编译库, `playground` 使用
