@@ -37,6 +37,7 @@ const baseConfig: DocEditorConfig = createBaseConfig({
       features: {
         spellcheck: false,
       },
+      plugins: true,
       // layout: {
       //   toolbar: false,
       //   leftMenu: false,

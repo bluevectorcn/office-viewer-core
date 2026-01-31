@@ -16,6 +16,7 @@
     "build:lib": "vite build --config vite.lib.config.ts",
     "preview": "vite preview",
     "build:onlyoffice": "tsx scripts/build-onlyoffice.ts",
+    "install:plugins": "tsx scripts/install-plugins-themes.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",

@@ -30,16 +30,6 @@ cd office-viewer-core
 pnpm install
 ```
 
-#### 1.1 构建 OnlyOffice 运行时
-
-该步骤会自动按需下载 `package.json` 中指定的 OnlyOffice 源码并进行编译，最后同步到 `vendor/` 目录中：
-
-> [!NOTE]
-> 脚本会使用 `git clone --depth 1` 下载指定版本的 Tag，以节省磁盘空间。
-
-```bash
-pnpm build:onlyoffice
-```
 
 #### 1.1 添加字体
 
@@ -50,7 +40,26 @@ pnpm build:onlyoffice
 - 下载x2t：[这里](https://github.com/cryptpad/onlyoffice-x2t-wasm/releases) (建议使用7.3的版本), 也可自行基于 [onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) 进行编译
 - 拷贝 x2t.js 和 x2t.wasm 到项目根目录 `wasm/x2t` 下。
 
-编译库, `playground` 使用
+#### 1.3 添加插件 (可选)
+
+1. 从 [ONLYOFFICE/onlyoffice.github.io Releases](https://github.com/ONLYOFFICE/onlyoffice.github.io/releases) 下载所需的 `*.plugin` 文件
+2. 将下载的 `.plugin` 文件拷贝到项目根目录的 `plugins/` 目录下
+
+#### 2 构建 OnlyOffice 运行时
+
+该步骤会自动按需下载 `package.json` 中指定的 OnlyOffice 源码并进行编译，最后同步到 `vendor/` 目录中：
+
+```bash
+pnpm build:onlyoffice
+```
+
+可单独运行以下命令安装插件和主题：
+
+```bash
+pnpm install:plugins
+```
+
+编译库
 
 ```bash
 pnpm build:lib

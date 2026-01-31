@@ -1,345 +1,224 @@
-import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
-import zlib from "node:zlib";
+#!/usr/bin/env npx tsx
+/**
+ * OnlyOffice 构建脚本
+ *
+ * 用法: pnpm build:onlyoffice [选项]
+ *
+ * 选项:
+ *   --skip-fonts        跳过字体处理
+ *   --skip-compress     跳过 Brotli 压缩
+ *   --skip-wasm         跳过 WASM 复制
+ *   --sync-only         只同步仓库，不构建
+ *   --pm <npm|pnpm|yarn> 指定包管理器
+ *   -q, --quiet         静默模式
+ *   -d, --debug         调试模式
+ *   -h, --help          显示帮助
+ */
 
-const rootDir = process.cwd();
-const mainPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf-8"));
-const fullVersion = mainPkg.onlyoffice?.version || "9.3.0.1"; // 例如 "9.3.0.67"
-const submoduleDir = path.join(rootDir, mainPkg.onlyoffice?.submodule ?? "submodules/onlyoffice/web-apps");
-const sdkjsDir = path.join(rootDir, "submodules/onlyoffice/sdkjs");
-const vendorDir = path.join(rootDir, "vendor", "onlyoffice", "web-apps");
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { BuildStep } from "./lib/types.js";
+import { loadConfig, parseArgs, printConfig, showHelp } from "./lib/config.js";
+import { logger } from "./lib/logger.js";
+import { createProgressTracker } from "./lib/progress.js";
+import { Executor } from "./lib/executor.js";
+import { SdkjsBuilder } from "./lib/builders/sdkjs.js";
+import { WebAppsBuilder } from "./lib/builders/web-apps.js";
+import { FontProcessor } from "./lib/processors/fonts.js";
+import { WasmProcessor } from "./lib/processors/wasm.js";
+import { PluginProcessor } from "./lib/processors/plugins.js";
+import { ThemeProcessor } from "./lib/processors/themes.js";
+import { compressAssets } from "./lib/compressor.js";
+import { remove, copyFile } from "./lib/fs-utils.js";
 
-// 解析版本号逻辑：9.3.0.67 -> version: 9.3.0, build: 67
-const versionParts = fullVersion.split(".");
-const buildNo = versionParts.pop() || "1";
-const productVersion = versionParts.join(".");
+// ─────────────────────────────────────────────────────────────────────────────
+// 主程序
+// ─────────────────────────────────────────────────────────────────────────────
 
-function run(command: string, args: string[], cwd: string, extraEnv = {}): number {
-  const polyfill = `
-    const util = require('util');
-    if (!util.isRegExp) util.isRegExp = (obj) => Object.prototype.toString.call(obj) === '[object RegExp]';
-    if (!util.isArray) util.isArray = Array.isArray;
-  `;
-  const polyfillPath = path.join(rootDir, ".polyfill.cjs");
-  fs.writeFileSync(polyfillPath, polyfill);
+async function main(): Promise<number> {
+  const rootDir = process.cwd();
 
-  const result = spawnSync(command, args, {
-    cwd,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      ...extraEnv,
-      npm_config_legacy_peer_deps: "true",
-      PRODUCT_VERSION: productVersion,
-      BUILD_NUMBER: buildNo,
-      NODE_OPTIONS: `--require ${polyfillPath} --openssl-legacy-provider ` + (process.env.NODE_OPTIONS ?? "")
-    }
-  });
+  // 解析命令行参数
+  const cliOptions = parseArgs(process.argv.slice(2));
 
-  return result.status ?? 1;
-}
-
-function syncSubmodule(repoUrl: string, dir: string, version: string) {
-  if (!version) return;
-  const parentDir = path.dirname(dir);
-  if (!fs.existsSync(parentDir)) {
-    fs.mkdirSync(parentDir, { recursive: true });
+  // 显示帮助
+  if (cliOptions.help) {
+    showHelp();
+    return 0;
   }
 
-  const tag = `v${version}`;
-  
-  if (!fs.existsSync(dir)) {
-    console.log(`Cloning ${repoUrl} to ${path.relative(rootDir, dir)} at tag ${tag}...`);
-    const cloneResult = spawnSync("git", ["clone", "--depth", "1", "--branch", tag, repoUrl, dir], { stdio: "inherit" });
-    if (cloneResult.status !== 0) {
-      console.error(`Failed to clone ${repoUrl} at version ${tag}.`);
-      process.exit(1);
-    }
-    return;
-  }
+  // 加载配置
+  const config = loadConfig(rootDir, cliOptions);
 
-  console.log(`Checking version for ${path.relative(rootDir, dir)}...`);
-  
-  // 检查当前是否已经在该 tag
-  const currentStatus = spawnSync("git", ["describe", "--tags", "--exact-match"], { cwd: dir, encoding: "utf-8" });
-  if (currentStatus.status === 0 && currentStatus.stdout.trim() === tag) {
-    console.log(`${path.relative(rootDir, dir)} is already at ${tag}.`);
-  } else {
-    console.log(`Updating ${path.relative(rootDir, dir)} to ${tag}...`);
-    // 获取最新标签
-    spawnSync("git", ["fetch", "--tags", "--depth", "1", "origin", tag], { cwd: dir });
-    spawnSync("git", ["checkout", "."], { cwd: dir });
-    spawnSync("git", ["clean", "-fd"], { cwd: dir });
-    
-    if (spawnSync("git", ["checkout", tag], { cwd: dir }).status !== 0) {
-      console.warn(`Warning: Could not checkout version ${tag} in ${path.relative(rootDir, dir)}.`);
-    } else {
-      console.log(`Successfully checked out ${tag} in ${path.relative(rootDir, dir)}`);
-    }
-  }
-}
+  // 配置日志
+  logger.setQuiet(config.options.quiet);
+  logger.setDebug(config.options.debug);
 
-function patchOnlyOfficeConfigs() {
-  // 1. 修复所有 build/*.json 中的版本号
-  const buildDir = path.join(submoduleDir, "build");
-  if (fs.existsSync(buildDir)) {
-    const jsonFiles = fs.readdirSync(buildDir).filter(f => f.endsWith(".json") && f !== "package.json");
-    jsonFiles.forEach(file => {
-      const filePath = path.join(buildDir, file);
-      const config = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      if (config.version) {
-        config.version = productVersion;
-        config.build = parseInt(buildNo, 10) || 1;
-        fs.writeFileSync(filePath, JSON.stringify(config, null, 4));
-      }
-    });
-  }
+  // 打印配置信息
+  printConfig(config);
 
-  // 2. Webpack 5 ESM 补丁
-  const framework7ConfigPath = path.join(submoduleDir, "vendor/framework7-react/build/webpack.config.js");
-  if (fs.existsSync(framework7ConfigPath)) {
-    let content = fs.readFileSync(framework7ConfigPath, "utf-8");
-    if (!content.includes("fullySpecified: false")) {
-      // 注入 Webpack 补丁以处理 ESM 路径
-      content = content.replace(/(rules:\s*\[)/, "$1 { test: /\\.js$/, resolve: { fullySpecified: false } },");
-      content = content.replace(/(test:\s*\/\\\.\(mjs\|js\|jsx\)\\\$\/,)/, "$1 resolve: { fullySpecified: false },");
-      fs.writeFileSync(framework7ConfigPath, content);
-    }
-  }
-}
+  // 创建进度跟踪器
+  const progress = createProgressTracker(config.options);
 
-function ensureSubmodule(dir: string) {
-  if (!fs.existsSync(dir)) {
-    console.error(`Submodule missing at ${dir}. Run git submodule update --init --recursive.`);
-    process.exit(1);
-  }
-}
+  // 创建构建器和处理器
+  const executor = new Executor(config);
+  const sdkjsBuilder = new SdkjsBuilder(config);
+  const webAppsBuilder = new WebAppsBuilder(config);
+  const fontProcessor = new FontProcessor(config);
+  const wasmProcessor = new WasmProcessor(config);
+  const pluginProcessor = new PluginProcessor(config);
+  const themeProcessor = new ThemeProcessor(config);
 
-function findBuildOutput(baseDir: string) {
-  const candidates = ["deploy", "build", "dist", "out"];
-  for (const candidate of candidates) {
-    const resolved = path.join(baseDir, candidate);
-    if (!fs.existsSync(resolved)) continue;
-
-    // Web Apps 特征
-    if (fs.existsSync(path.join(resolved, "apps/documenteditor/main/index.html"))) return resolved;
-    if (fs.existsSync(path.join(resolved, "web-apps/apps/documenteditor/main/index.html"))) return path.join(resolved, "web-apps");
-
-    // SDKJS 特征
-    if (fs.existsSync(path.join(resolved, "sdkjs/word/sdk-all.js"))) return path.join(resolved, "sdkjs");
-    if (fs.existsSync(path.join(resolved, "sdkjs/cell/sdk-all.js"))) return path.join(resolved, "sdkjs");
-    if (fs.existsSync(path.join(resolved, "sdkjs/common/Native/native.js"))) return path.join(resolved, "sdkjs");
-  }
-  return null;
-}
-
-function moveOutput(source: string, target: string) {
-  fs.rmSync(target, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  try {
-    fs.renameSync(source, target);
-  } catch (e) {
-    // 跨设备移动可能失败，回退到拷贝+删除
-    fs.cpSync(source, target, { recursive: true });
-    fs.rmSync(source, { recursive: true, force: true });
-  }
-}
-
-// --- Main Flow ---
-
-const WEB_APPS_REPO = "https://github.com/ONLYOFFICE/web-apps.git";
-const SDK_JS_REPO = "https://github.com/ONLYOFFICE/sdkjs.git";
-
-syncSubmodule(WEB_APPS_REPO, submoduleDir, fullVersion);
-syncSubmodule(SDK_JS_REPO, sdkjsDir, fullVersion);
-
-patchOnlyOfficeConfigs();
-
-function processFonts() {
-  const fontsSource = path.join(rootDir, "fonts");
-  if (!fs.existsSync(fontsSource) || fs.readdirSync(fontsSource).length === 0) {
-    console.log("No custom fonts found in 'fonts' directory. Skipping font generation.");
-    return;
-  }
-
-  console.log("Processing custom fonts...");
-  const tempOut = path.join(rootDir, "temp_fonts_out");
-  fs.rmSync(tempOut, { recursive: true, force: true });
-  fs.mkdirSync(tempOut);
+  let success = true;
 
   try {
-    const uid = process.getuid ? process.getuid() : 0;
-    const gid = process.getgid ? process.getgid() : 0;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 1: 清理 vendor 目录
+    // ─────────────────────────────────────────────────────────────────────────
+    logger.info("清理 vendor/onlyoffice 目录...");
+    remove(config.paths.vendor);
 
-    console.log("Running Docker container for font generation...");
-    // 假设 docker 在 PATH 中
-    const dockerResult = spawnSync("docker", [
-      "run", "--rm",
-      "--user", `${uid}:${gid}`,
-      "-v", `${fontsSource}:/fonts`,
-      "-v", `${tempOut}:/out`,
-      "jacktea/allfontsgen:latest",
-      "/fonts", "/out"
-    ], { stdio: "inherit" });
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 2: 同步仓库
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.SYNC_REPOS);
 
-    if (dockerResult.status !== 0) {
-      console.error("Docker font generation failed.");
-      // 不中断构建，只是打印错误？或者应该抛出异常？
-      // 根据用户需求，这里应该是一个重要步骤，但如果没有docker可能应该警告。
-      // 为了安全起见，我们打印错误但不 crash 整个 build，除非 strict mode。
-      // 这里选择打印错误。
+    if (!sdkjsBuilder.sync()) {
+      throw new Error("SDKJS 仓库同步失败");
+    }
+
+    if (!webAppsBuilder.sync()) {
+      throw new Error("Web Apps 仓库同步失败");
+    }
+
+    progress.endStep();
+
+    // 如果只同步仓库，则到此结束
+    if (config.options.syncOnly) {
+      logger.success("仓库同步完成");
+      return 0;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 3: 构建 SDKJS
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.BUILD_SDKJS);
+
+    if (!sdkjsBuilder.build()) {
+      throw new Error("SDKJS 构建失败");
+    }
+
+    if (!sdkjsBuilder.copyOutput()) {
+      logger.warn("SDKJS 产物复制失败，继续构建...");
+    }
+
+    progress.endStep();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 4: 构建 Web Apps
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.BUILD_WEBAPPS);
+
+    webAppsBuilder.patchConfigs();
+
+    if (!webAppsBuilder.build()) {
+      throw new Error("Web Apps 构建失败");
+    }
+
+    if (!webAppsBuilder.copyOutput()) {
+      throw new Error("Web Apps 产物复制失败");
+    }
+
+    progress.endStep();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 5: 处理字体
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.options.skipFonts) {
+      progress.skipStep(BuildStep.PROCESS_FONTS, "用户跳过");
     } else {
-      console.log("Fonts generated successfully. Copying artifacts...");
+      progress.startStep(BuildStep.PROCESS_FONTS);
+      fontProcessor.process();
+      progress.endStep();
+    }
 
-      const sdkjsCommonDir = path.join(rootDir, "vendor", "onlyoffice", "sdkjs", "common");
-      const sdkjsImagesDir = path.join(sdkjsCommonDir, "Images");
-      const onlyofficeDir = path.join(rootDir, "vendor", "onlyoffice");
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 6: 复制 WASM
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.options.skipWasm) {
+      progress.skipStep(BuildStep.COPY_WASM, "用户跳过");
+    } else {
+      progress.startStep(BuildStep.COPY_WASM);
+      wasmProcessor.copy();
+      progress.endStep();
+    }
 
-      // 1. AllFonts.js, font_selection.bin -> vendor/onlyoffice/sdkjs/common
-      ["AllFonts.js", "font_selection.bin"].forEach(file => {
-        const src = path.join(tempOut, file);
-        if (fs.existsSync(src)) {
-           fs.cpSync(src, path.join(sdkjsCommonDir, file), { force: true });
-        }
-      });
-      
-      // 2. font_thumbs/* -> vendor/onlyoffice/sdkjs/common/Images
-      const thumbsSrc = path.join(tempOut, "font_thumbs");
-      if (fs.existsSync(thumbsSrc)) {
-         fs.cpSync(thumbsSrc, sdkjsImagesDir, { recursive: true, force: true });
-      }
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 7: 复制 Service Worker
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.COPY_SERVICE_WORKER);
 
-      // 3. fonts/* -> vendor/onlyoffice
-      // 注意：输出目录里的 fonts 是一个目录，要在 vendor/onlyoffice 下也叫 fonts
-      const fontsDstSrc = path.join(tempOut, "fonts");
-      if (fs.existsSync(fontsDstSrc)) {
-        // 如果目标存在，先清理还是合并？cpSync 默认是 overwrite file，但不会删除多余文件。
-        // 这里假设是合并或覆盖。
-        const fontsTarget = path.join(onlyofficeDir, "fonts");
-        fs.mkdirSync(fontsTarget, { recursive: true });
-        fs.cpSync(fontsDstSrc, fontsTarget, { recursive: true, force: true });
-      }
+    const swSource = path.join(config.paths.vendor, "sdkjs", "common", "serviceworker", "document_editor_service_worker.js");
+    const swTarget = path.join(config.paths.vendor, "document_editor_service_worker.js");
+
+    if (fs.existsSync(swSource)) {
+      copyFile(swSource, swTarget);
+      logger.success("Service Worker 复制完成");
+    } else {
+      logger.warn(`Service Worker 未找到: ${swSource}`);
+    }
+
+    progress.endStep();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 8: 安装插件
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.INSTALL_PLUGINS);
+    pluginProcessor.process();
+    progress.endStep();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 9: 安装主题
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.INSTALL_THEMES);
+    themeProcessor.process();
+    progress.endStep();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 10: 压缩资源
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.options.skipCompress) {
+      progress.skipStep(BuildStep.COMPRESS, "用户跳过");
+    } else {
+      progress.startStep(BuildStep.COMPRESS);
+      compressAssets(config.paths.vendor);
+      progress.endStep();
+    }
+  } catch (error) {
+    success = false;
+    if (error instanceof Error) {
+      logger.error(error.message);
+    } else {
+      logger.error(String(error));
     }
   } finally {
-    fs.rmSync(tempOut, { recursive: true, force: true });
+    // ─────────────────────────────────────────────────────────────────────────
+    // 清理
+    // ─────────────────────────────────────────────────────────────────────────
+    progress.startStep(BuildStep.CLEANUP);
+
+    sdkjsBuilder.cleanup();
+    webAppsBuilder.cleanup();
+    executor.cleanup();
+
+    progress.endStep();
+    progress.finish(success);
   }
+
+  return success ? 0 : 1;
 }
 
-function copyWasm() {
-  const wasmX2tSource = path.join(rootDir, "wasm", "x2t");
-  if (!fs.existsSync(wasmX2tSource)) return;
-
-  console.log("Copying x2t WASM files...");
-  const targetDir = path.join(rootDir, "vendor", "onlyoffice", "x2t"); // 假设放在 vendor/onlyoffice/x2t
-  fs.rmSync(targetDir, { recursive: true, force: true });
-  
-  // 按照用户指令：把目录wasm下的x2t,拷贝到 vendor/onlyoffice 目录下。
-  // 这意味着 vendor/onlyoffice 下会有一个 x2t 目录。
-  fs.cpSync(wasmX2tSource, targetDir, { recursive: true });
-}
-
-function compressAssets(dir: string) {
-  if (!fs.existsSync(dir)) return;
-  
-  console.log(`Compressing assets in ${path.relative(rootDir, dir)}...`);
-  const files = fs.readdirSync(dir, { withFileTypes: true });
-  
-  for (const file of files) {
-    const fullPath = path.join(dir, file.name);
-    if (file.isDirectory()) {
-      compressAssets(fullPath);
-    } else if (file.isFile()) {
-       if (/\.(js|css|wasm)$/.test(file.name)) {
-         try {
-           const content = fs.readFileSync(fullPath);
-           const compressed = zlib.brotliCompressSync(content, {
-             params: {
-               [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT,
-               [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
-             }
-           });
-           fs.writeFileSync(fullPath + ".br", compressed);
-         } catch (e) {
-           console.error(`Failed to compress ${file.name}:`, e);
-         }
-       }
-    }
-  }
-}
-
-const packageManager = process.env.ONLYOFFICE_PM ?? "pnpm";
-let buildExitCode = 0;
-
-try {
-  // 0. 清理 vendor/onlyoffice
-  console.log("Cleaning up vendor/onlyoffice...");
-  const onlyofficeVendorPath = path.join(rootDir, "vendor", "onlyoffice");
-  fs.rmSync(onlyofficeVendorPath, { recursive: true, force: true });
-
-  // 1. 显式构建 sdkjs
-  const sdkjsBuildDir = path.join(sdkjsDir, "build");
-  if (fs.existsSync(sdkjsBuildDir)) {
-    console.log(`Installing dependencies for SDKJS in ${sdkjsBuildDir}...`);
-    run("npm", ["install"], sdkjsBuildDir);
-    console.log("Building OnlyOffice SDKJS...");
-    run("npx", ["grunt"], sdkjsBuildDir);
-  }
-
-  // 2. 构建 web-apps
-  const submoduleBuildDir = path.join(submoduleDir, "build");
-  const cwd = fs.existsSync(path.join(submoduleBuildDir, "package.json")) ? submoduleBuildDir : submoduleDir;
-  console.log(`Installing dependencies for Web Apps in ${cwd}...`);
-  run(packageManager, ["install"], cwd);
-  console.log(`Starting Web Apps build. Version: ${productVersion}, Build: ${buildNo}`);
-  
-  const pkg = JSON.parse(fs.readFileSync(path.join(submoduleBuildDir, "package.json"), "utf8"));
-  if (pkg.scripts && pkg.scripts.build) {
-    buildExitCode = run(packageManager, ["run", "build"], cwd) || 0;
-  } else {
-    buildExitCode = run("npx", ["grunt"], cwd);
-  }
-
-  // 3. 同步产物到 vendor (要在清理之前！)
-  const webAppsBuildOutput = findBuildOutput(submoduleDir);
-  if (webAppsBuildOutput) {
-      moveOutput(webAppsBuildOutput, vendorDir);
-      console.log(`Successfully moved OnlyOffice Web Apps to ${path.relative(rootDir, vendorDir)}`);
-  }
-
-  const sdkjsVendorDir = path.join(rootDir, "vendor", "onlyoffice", "sdkjs");
-  const sdkjsBuildOutput = findBuildOutput(sdkjsDir);
-  if (sdkjsBuildOutput) {
-      moveOutput(sdkjsBuildOutput, sdkjsVendorDir);
-      console.log(`Successfully moved OnlyOffice SDKJS to ${path.relative(rootDir, sdkjsVendorDir)}`);
-  }
-
-  // 4. 处理字体、WASM 和 压缩
-  processFonts();
-  copyWasm();
-  
-  // 5. 复制 Service Worker
-  const swSource = path.join(rootDir, "vendor", "onlyoffice", "sdkjs", "common", "serviceworker", "document_editor_service_worker.js");
-  const swTarget = path.join(rootDir, "vendor", "onlyoffice", "document_editor_service_worker.js");
-  if (fs.existsSync(swSource)) {
-    console.log("Copying Service Worker...");
-    fs.cpSync(swSource, swTarget, { force: true });
-  } else {
-    console.warn(`Warning: Service Worker not found at ${swSource}`);
-  }
-  
-  const onlyofficeVendorRoot = path.join(rootDir, "vendor", "onlyoffice");
-  if (fs.existsSync(onlyofficeVendorRoot)) {
-    compressAssets(onlyofficeVendorRoot);
-  }
-} finally {
-  console.log("Cleaning up submodules...");
-  [submoduleDir, sdkjsDir].forEach(dir => {
-    spawnSync("git", ["checkout", "."], { cwd: dir });
-    spawnSync("git", ["clean", "-fd"], { cwd: dir });
-  });
-  const polyfillPath = path.join(rootDir, ".polyfill.cjs");
-  if (fs.existsSync(polyfillPath)) fs.unlinkSync(polyfillPath);
-}
-
-process.exit(buildExitCode);
+// 运行主程序
+main().then((exitCode) => {
+  process.exit(exitCode);
+});
