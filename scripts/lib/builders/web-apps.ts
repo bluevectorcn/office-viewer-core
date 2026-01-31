@@ -124,8 +124,45 @@ export class WebAppsBuilder {
     logger.info(`复制 Web Apps 到 ${path.relative(rootDir, targetDir)}...`);
 
     moveDir(outputDir, targetDir);
+
+    // 修补漏复制的文件
+    this.patchMissingFiles(targetDir);
+
     logger.success("Web Apps 复制完成");
     return true;
+  }
+
+  /** 修补编译时漏复制的文件 */
+  private patchMissingFiles(targetDir: string): void {
+    const { paths } = this.config;
+
+    // 需要修补的文件列表：[源文件相对路径, 目标文件相对路径]
+    const filesToPatch = [
+      [
+        "apps/common/main/resources/img/doc-formats/formats@2.5x.svg",
+        "apps/common/main/resources/img/doc-formats/formats@2.5x.svg",
+      ],
+    ];
+
+    for (const [srcRelative, destRelative] of filesToPatch) {
+      const srcPath = path.join(paths.webApps, srcRelative);
+      const destPath = path.join(targetDir, destRelative);
+
+      // 如果目标已存在，跳过
+      if (fs.existsSync(destPath)) {
+        continue;
+      }
+
+      // 如果源文件存在，复制
+      if (fs.existsSync(srcPath)) {
+        const destDir = path.dirname(destPath);
+        if (!fs.existsSync(destDir)) {
+          fs.mkdirSync(destDir, { recursive: true });
+        }
+        fs.cpSync(srcPath, destPath);
+        logger.debug(`已修补: ${destRelative}`);
+      }
+    }
   }
 
   /** 清理仓库 */
