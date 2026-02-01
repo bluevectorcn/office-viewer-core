@@ -8,6 +8,7 @@ import * as path from "node:path";
 import type { BuildConfig } from "../types.js";
 import { logger } from "../logger.js";
 import { ensureDir, remove, copyFile, copyDir } from "../fs-utils.js";
+import { toDockerPath, getDockerUserArgs } from "../platform.js";
 
 export class FontProcessor {
   private config: BuildConfig;
@@ -50,29 +51,27 @@ export class FontProcessor {
     ensureDir(tempOut);
 
     try {
-      // 获取当前用户 UID/GID
-      const uid = process.getuid ? process.getuid() : 0;
-      const gid = process.getgid ? process.getgid() : 0;
-
       logger.info("使用 Docker 生成字体...");
 
-      const dockerResult = spawnSync(
-        "docker",
-        [
-          "run",
-          "--rm",
-          "--user",
-          `${uid}:${gid}`,
-          "-v",
-          `${paths.fonts}:/fonts`,
-          "-v",
-          `${tempOut}:/out`,
-          "jacktea/allfontsgen:latest",
-          "/fonts",
-          "/out",
-        ],
-        { stdio: "inherit" }
-      );
+      // 跨平台：转换路径为 Docker 格式，获取用户参数
+      const fontsDockerPath = toDockerPath(paths.fonts);
+      const tempOutDockerPath = toDockerPath(tempOut);
+      const userArgs = getDockerUserArgs();
+
+      const dockerArgs = [
+        "run",
+        "--rm",
+        ...userArgs,
+        "-v",
+        `${fontsDockerPath}:/fonts`,
+        "-v",
+        `${tempOutDockerPath}:/out`,
+        "jacktea/allfontsgen:latest",
+        "/fonts",
+        "/out",
+      ];
+
+      const dockerResult = spawnSync("docker", dockerArgs, { stdio: "inherit" });
 
       if (dockerResult.status !== 0) {
         logger.error("Docker 字体生成失败");

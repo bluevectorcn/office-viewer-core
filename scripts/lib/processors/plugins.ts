@@ -5,10 +5,10 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { spawnSync } from "node:child_process";
 import type { BuildConfig } from "../types.js";
 import { logger } from "../logger.js";
 import { ensureDir, remove } from "../fs-utils.js";
+import { extractZip } from "../platform.js";
 
 export class PluginProcessor {
   private config: BuildConfig;
@@ -29,7 +29,7 @@ export class PluginProcessor {
       .map((f) => path.join(pluginsDir, f));
   }
 
-  /** 解压单个插件 */
+  /** 解压单个插件（跨平台） */
   private extractPlugin(pluginPath: string, targetDir: string): boolean {
     const pluginName = path.basename(pluginPath, ".plugin");
     const extractDir = path.join(targetDir, pluginName);
@@ -37,12 +37,8 @@ export class PluginProcessor {
     // 创建目标目录
     ensureDir(extractDir);
 
-    // 使用 unzip 解压
-    const result = spawnSync("unzip", ["-o", "-q", pluginPath, "-d", extractDir], {
-      stdio: "pipe",
-    });
-
-    if (result.status !== 0) {
+    // 使用跨平台解压
+    if (!extractZip(pluginPath, extractDir)) {
       logger.warn(`解压插件失败: ${pluginName}`);
       return false;
     }

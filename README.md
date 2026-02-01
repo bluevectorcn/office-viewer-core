@@ -15,7 +15,8 @@
 - **Node.js**: 24.12.0+ (建议使用最新版本)
 - **pnpm**: 9.12.3+
 - **Git**: 用于下载 OnlyOffice 源码
-- **Docker**: (可选) 用于生成自定义字体
+- **Docker**: 用于生成自定义字体
+- **Windows**: Windows 10 或更高版本 (PowerShell 5.0+)
 
 ## 快速开始
 
