@@ -51,6 +51,10 @@ pnpm install
 该步骤会自动按需下载 `package.json` 中指定的 OnlyOffice 源码并进行编译，最后同步到 `vendor/` 目录中：
 
 ```bash
+# 查看命令说明
+pnpm build:onlyoffice --help
+
+# 完整构建
 pnpm build:onlyoffice
 ```
 
