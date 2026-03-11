@@ -117,14 +117,15 @@ const App: React.FC = () => {
   const onEditorReady = useCallback((editor: any) => {
     if (!activeDoc) return;
     
-    if (activeDoc.source === 'new') {
+    if (activeDoc.source === 'new' && !activeDoc.blob) {
       editor.newFile(activeDoc.name.split('.').pop() || 'docx');
-    } else if (activeDoc.source === 'local' && activeDoc.file) {
-      editor.open(activeDoc.file);
-    } else if (activeDoc.source === 'url' && activeDoc.url) {
+    } else if (activeDoc.source === 'url' && activeDoc.url && !activeDoc.blob) {
       editor.open(activeDoc.url);
-    } else if (activeDoc.source === 'template' && activeDoc.blob) {
-      editor.open(activeDoc.blob);
+    } else {
+      const content = activeDoc.blob || activeDoc.file;
+      if (content) {
+        editor.open(content);
+      }
     }
   }, [activeDoc]);
 
@@ -177,6 +178,31 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveToDB = async () => {
+    if (!viewerRef.current || !activeDoc) return;
+    try {
+      const result = await viewerRef.current.save();
+      if (!result) return;
+      
+      await db.addRecentFile({
+        name: activeDoc.name,
+        source: activeDoc.source,
+        url: activeDoc.url,
+        blob: result.blob,
+      });
+      // Update local state to reflect the save
+      setActiveDoc({
+        ...activeDoc,
+        blob: result.blob
+      });
+      showAlert(t('saved_successfully'));
+      loadData();
+    } catch (err) {
+      console.error("Failed to save to DB", err);
+      showAlert(t('save_failed'));
+    }
+  };
+
   // --- File Input Handlers ---
   const handleLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,6 +219,28 @@ const App: React.FC = () => {
       loadData();
     }
   }, [showPrompt, loadData]);
+
+  const generateUniqueFilename = useCallback((base: string, ext: string) => {
+    const timestamp = new Date().getTime().toString().slice(-6);
+    return `${base}_${timestamp}.${ext}`;
+  }, []);
+
+  const handleRecentClick = useCallback((file: RecentFile) => {
+    if (file.blob) {
+      handleOpenDoc({ 
+        source: file.source, 
+        blob: file.blob, 
+        name: file.name, 
+        url: file.url 
+      });
+    } else if (file.source === 'url' && file.url) {
+      handleOpenDoc({ source: 'url', url: file.url, name: file.name });
+    } else if (file.source === 'new') {
+      handleOpenDoc({ source: 'new', name: file.name });
+    } else if (file.source === 'local') {
+      showAlert(t('open_local') + ": Browser security restrictions. Please select the file again.");
+    }
+  }, [handleOpenDoc, showAlert]);
 
   const getFilenameFromUrl = (url: string) => {
     try {
@@ -279,15 +327,15 @@ const App: React.FC = () => {
       <div className="section">
         <h3>{t('create_new')}</h3>
         <div className="card-grid">
-          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'document.docx' })}>
+          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: generateUniqueFilename(t('word_doc'), 'docx') })}>
             <div className="icon">📝</div>
             <div className="title">{t('word_doc')}</div>
           </div>
-          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'spreadsheet.xlsx' })}>
+          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: generateUniqueFilename(t('excel_sheet'), 'xlsx') })}>
             <div className="icon">📊</div>
             <div className="title">{t('excel_sheet')}</div>
           </div>
-          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'presentation.pptx' })}>
+          <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: generateUniqueFilename(t('ppt_pres'), 'pptx') })}>
             <div className="icon">📽️</div>
             <div className="title">{t('ppt_pres')}</div>
           </div>
@@ -320,19 +368,7 @@ const App: React.FC = () => {
           <h3>{t('recent')}</h3>
           <div className="card-grid">
             {recentFiles.slice(0, 4).map(file => (
-              <div className="card" key={file.id} onClick={() => {
-                if (file.source === 'url' && file.url) {
-                  handleOpenDoc({ source: 'url', url: file.url, name: file.name });
-                } else if (file.source === 'local' && file.blob) {
-                  handleOpenDoc({ source: 'local', blob: file.blob, file: file.blob as File, name: file.name });
-                } else if (file.source === 'template' && file.blob) {
-                  handleOpenDoc({ source: 'template', blob: file.blob, name: file.name });
-                } else if (file.source === 'local') {
-                  showAlert(t('open_local') + ": Browser security restrictions. Please select the file again.");
-                } else if (file.source === 'new') {
-                   handleOpenDoc({ source: 'new', name: file.name });
-                }
-              }}>
+              <div className="card" key={file.id} onClick={() => handleRecentClick(file)}>
                 <div className="icon">📄</div>
                 <div className="title">{file.name}</div>
                 <div className="subtitle">{new Date(file.date).toLocaleDateString()}</div>
@@ -352,19 +388,7 @@ const App: React.FC = () => {
           <p>{t('no_recent')}</p>
         ) : (
           recentFiles.map(file => (
-            <div className="list-item" key={file.id} onClick={() => {
-              if (file.source === 'url' && file.url) {
-                handleOpenDoc({ source: 'url', url: file.url, name: file.name });
-              } else if (file.source === 'local' && file.blob) {
-                handleOpenDoc({ source: 'local', blob: file.blob, file: file.blob as File, name: file.name });
-              } else if (file.source === 'template' && file.blob) {
-                handleOpenDoc({ source: 'template', blob: file.blob, name: file.name });
-              } else if (file.source === 'local') {
-                showAlert(t('open_local') + ": Please select the file again.");
-              } else if (file.source === 'new') {
-                handleOpenDoc({ source: 'new', name: file.name });
-              }
-            }}>
+            <div className="list-item" key={file.id} onClick={() => handleRecentClick(file)}>
               <div className="list-item-icon">📄</div>
               <div className="list-item-content">
                 <div className="list-item-title">{file.name}</div>
@@ -423,9 +447,9 @@ const App: React.FC = () => {
           {PRESET_TEMPLATES.map(tpl => (
             <div className="card" key={tpl.id} onClick={() => {
               if (tpl.blob) {
-                handleOpenDoc({ source: 'template', blob: tpl.blob, name: `Untitled from ${tpl.name}` });
+                handleOpenDoc({ source: 'template', blob: tpl.blob, name: generateUniqueFilename(tpl.name, tpl.type) });
               } else {
-                handleOpenDoc({ source: 'new', name: `document.${tpl.type}` });
+                handleOpenDoc({ source: 'new', name: generateUniqueFilename(tpl.name, tpl.type) });
               }
             }}>
               <div className="icon">
@@ -445,8 +469,11 @@ const App: React.FC = () => {
       <div className="editor-header">
         <button className="secondary" onClick={handleCloseEditor}>← {t('back')}</button>
         <div className="editor-header-title">{activeDoc?.name || "Document"}</div>
-        <button className="secondary" onClick={handleSaveAsTemplate}>{t('save_template')}</button>
-        <button onClick={handleSaveToDisk}>{t('download')}</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="secondary" onClick={handleSaveAsTemplate}>{t('save_template')}</button>
+          <button style={{ background: 'var(--accent)', color: 'white' }} onClick={handleSaveToDB}>{t('save_to_db')}</button>
+          <button className="secondary" onClick={handleSaveToDisk}>{t('download')}</button>
+        </div>
       </div>
       <div className="editor-container">
         <OnlyOfficeViewer
