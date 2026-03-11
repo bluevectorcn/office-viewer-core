@@ -350,6 +350,10 @@ export interface DocEditorConfig {
   document?: DocumentConfig;
   editorConfig?: EditorConfig;
   events?: EventsConfig;
+  /**
+   * Custom translations for i18n
+   */
+  translations?: Record<string, string>;
 }
 
 export interface EmbeddedConfig extends DocEditorConfig {

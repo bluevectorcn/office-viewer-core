@@ -12,6 +12,7 @@ import { defaultLogger } from '../shared/logging/Logger';
 import { createId, createReadyLatch } from '../shared/utils/LifecycleHelpers';
 import { loadDocsApi } from '../infrastructure/external/DocsApiProvider';
 import { initX2TModule } from '../infrastructure/conversion/X2TService';
+import { I18nManager, t } from '../shared/i18n/I18nManager';
 import { buildEditorConfig } from './config/EditorConfigBuilder';
 import { observeEditorIframes } from '../infrastructure/dom/IframeObserver';
 import { injectGlobals, exposeDocEditorConfig } from '../application/initialization/GlobalInjector';
@@ -51,6 +52,7 @@ export class EditorFactory {
     // 1. 初始化全局环境
     injectGlobals();
     setAssetsPrefix(baseConfig.assetsPrefix);
+    I18nManager.getInstance().init(baseConfig.editorConfig?.lang, baseConfig.translations);
 
     // 2. 创建 DOM host
     const host = document.createElement('div');
@@ -116,13 +118,13 @@ export class EditorFactory {
 
       try {
         logger.info('Opening document');
-        notifyLoading('loading', 'Loading scripts...');
+        notifyLoading('loading', t('loading_scripts'));
 
         // 初始化 DocsAPI 和 X2T
         await loadDocsApi();
         await initX2TModule();
 
-        notifyLoading('converting', 'Processing document...');
+        notifyLoading('converting', t('processing_document'));
 
         // 使用编排器打开文档
         await orchestrator.open(input);
@@ -130,7 +132,7 @@ export class EditorFactory {
         // 获取会话信息
         const session = orchestrator.getCurrentSession();
         if (!session) {
-          throw new Error('Session not created');
+          throw new Error(t('session_not_created'));
         }
 
         // 销毁旧的编辑器实例
@@ -156,19 +158,19 @@ export class EditorFactory {
           onAppReady: ready.resolve,
           onDocumentReady: () => {
             ready.resolve();
-            notifyLoading('ready', 'Ready');
+            notifyLoading('ready', t('ready'));
           },
           onDownloadAs: (event) => downloadManager.handleDownloadAs(event),
           onError: (error) => {
             logger.error('OnlyOffice error', error);
-            notifyLoading('error', `Editor error: ${JSON.stringify(error)}`);
+            notifyLoading('error', t('editor_error', [JSON.stringify(error)]));
           }
         });
 
         // 暴露配置（用于调试）
         exposeDocEditorConfig(config);
 
-        notifyLoading('initing', 'Initializing editor...');
+        notifyLoading('initing', t('initializing_editor'));
 
         // 创建 DocsAPI 编辑器实例
         docEditorInstance = new window.DocsAPI!.DocEditor(hostId, config);
@@ -180,7 +182,7 @@ export class EditorFactory {
         logger.info('Document opened and editor ready');
       } catch (error) {
         logger.error('Failed to open document', error);
-        notifyLoading('error', error instanceof Error ? error.message : 'Unknown error');
+        notifyLoading('error', error instanceof Error ? error.message : t('unknown_error'));
         throw error;
       }
     };

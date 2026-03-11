@@ -1,5 +1,6 @@
 import { createEditor } from "../../application/EditorFactory";
 import type { DocEditorConfig, IEditor, EditorInput, ExportFormat } from "../../shared/types/EditorTypes";
+import { I18nManager, t } from "../../shared/i18n/I18nManager";
 
 export class OnlyOfficeViewer extends HTMLElement implements IEditor {
   private static readonly NOT_INITIALIZED_ERROR = "Editor not initialized. Call init(config) first.";
@@ -73,12 +74,17 @@ export class OnlyOfficeViewer extends HTMLElement implements IEditor {
   }
 
   private ensureDefaultMaskContent(mask: HTMLElement): void {
-    if (mask.querySelector(".oo-loading-status")) {
+    const statusEl = mask.querySelector(".oo-loading-status") as HTMLElement | null;
+    if (statusEl) {
+      // If it exists but was created before i18n init, update it
+      if (statusEl.textContent === 'Loading...' || statusEl.textContent === '加载中...') {
+         statusEl.textContent = t('loading');
+      }
       return;
     }
     mask.innerHTML = `
       <div class="oo-loading-spinner" style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: oo-spin 1s linear infinite;"></div>
-      <div class="oo-loading-status" style="margin-top: 15px; color: #333; font-weight: 500;">Loading...</div>
+      <div class="oo-loading-status" style="margin-top: 15px; color: #333; font-weight: 500;">${t('loading')}</div>
       <div class="oo-loading-progress" style="margin-top: 10px; width: 200px; height: 4px; background: #eee; border-radius: 2px; display: none;">
         <div class="oo-loading-bar" style="width: 0%; height: 100%; background: #3498db; border-radius: 2px; transition: width 0.3s;"></div>
       </div>
@@ -160,9 +166,13 @@ export class OnlyOfficeViewer extends HTMLElement implements IEditor {
    * Initialize the editor with configuration
    */
   public async init(config: DocEditorConfig): Promise<void> {
+    this._config = config;
+    
+    // Initialize i18n early
+    I18nManager.getInstance().init(this._config.editorConfig?.lang, this._config.translations);
+
     this.ensureDom();
     this.destroy(); // Cleanup existing if any
-    this._config = config;
     
     // Apply attributes if not in config
     const attrPrefix = this.getAttribute("assets-prefix");

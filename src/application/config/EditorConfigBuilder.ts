@@ -139,6 +139,10 @@ function mergeBaseConfig(overrides?: BaseConfigOverrides): DocEditorConfig {
       ...(DEFAULT_CONFIG.events ?? {}),
       ...(overrides.events ?? {}),
     },
+    translations: {
+      ...(DEFAULT_CONFIG.translations ?? {}),
+      ...(overrides.translations ?? {}),
+    },
   };
 }
 
