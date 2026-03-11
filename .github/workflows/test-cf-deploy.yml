@@ -1,0 +1,38 @@
+name: Test Cloudflare Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'GitHub Release Tag to deploy (e.g. v0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Release Asset
+        run: |
+          gh release download ${{ inputs.tag }} --pattern 'release-dist.tar.gz' --output release-dist.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Asset
+        run: |
+          tar -xzf release-dist.tar.gz
+          # 确保 dist 目录存在
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory not found after extraction"
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=office
