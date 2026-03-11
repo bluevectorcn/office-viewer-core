@@ -136,7 +136,7 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, "index.html"),
         ...Object.fromEntries(
-          globSync("playground/*.html").map((file: string) => [
+          globSync("playground/**/*.html").map((file: string) => [
             file.replace(/\.html$/, "").replace(/\//g, "_"),
             path.resolve(__dirname, file),
           ])

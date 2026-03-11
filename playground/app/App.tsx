@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBaseConfig } from 'office-viewer-core';
 import { OnlyOfficeViewer } from 'office-viewer-core/react';
 
-// Storage and Presets
+// Storage, i18n and Presets
 import { db, RecentFile, Template } from './db';
 import { PRESET_TEMPLATES } from './presets';
+import { t } from './i18n';
+import Modal, { ModalType } from './components/Modal';
 
 // Styles
 import './App.css';
@@ -32,10 +34,23 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   
+  // Custom Modal State
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    type: ModalType;
+    message: string;
+    defaultValue?: string;
+    resolve?: (value?: any) => void;
+  }>({
+    isOpen: false,
+    type: 'alert',
+    message: '',
+  });
+
   const viewerRef = useRef<any>(null);
 
   // Load data from IndexedDB
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const recents = await db.getRecentFiles();
       setRecentFiles(recents);
@@ -44,15 +59,44 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("Failed to load data from DB:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // --- Modal Helpers ---
+  const showModal = useCallback((type: ModalType, message: string, defaultValue?: string): Promise<any> => {
+    return new Promise((resolve) => {
+      setModalConfig({
+        isOpen: true,
+        type,
+        message,
+        defaultValue,
+        resolve,
+      });
+    });
+  }, []);
+
+  const showAlert = useCallback((msg: string) => showModal('alert', msg), [showModal]);
+  const showConfirm = useCallback((msg: string) => showModal('confirm', msg), [showModal]);
+  const showPrompt = useCallback((msg: string, def?: string) => showModal('prompt', msg, def), [showModal]);
+
+  const handleModalConfirm = (value?: string) => {
+    const resolve = modalConfig.resolve;
+    setModalConfig(prev => ({ ...prev, isOpen: false }));
+    resolve?.(value ?? true);
+  };
+
+  const handleModalCancel = () => {
+    const resolve = modalConfig.resolve;
+    setModalConfig(prev => ({ ...prev, isOpen: false }));
+    resolve?.(false);
+  };
+
   // --- Document Handling Actions ---
 
-  const handleOpenDoc = async (doc: ActiveDocument) => {
+  const handleOpenDoc = useCallback(async (doc: ActiveDocument) => {
     setActiveDoc(doc);
     setView('editor');
     
@@ -62,12 +106,13 @@ const App: React.FC = () => {
         name: doc.name,
         source: doc.source,
         url: doc.url,
+        blob: doc.file || doc.blob,
       });
       loadData();
     } catch (e) {
       console.error("Failed to add to recent files", e);
     }
-  };
+  }, [loadData]);
 
   const onEditorReady = useCallback((editor: any) => {
     if (!activeDoc) return;
@@ -112,7 +157,7 @@ const App: React.FC = () => {
 
   const handleSaveAsTemplate = async () => {
     if (!viewerRef.current) return;
-    const name = prompt("Enter a name for the new template:", activeDoc?.name || "New Template");
+    const name = await showPrompt(t('enter_template_name'), activeDoc?.name || "New Template");
     if (!name) return;
 
     try {
@@ -124,11 +169,11 @@ const App: React.FC = () => {
         blob: result.blob,
         date: Date.now()
       });
-      alert("Template saved successfully!");
+      showAlert(t('template_saved'));
       loadData();
     } catch (err) {
       console.error("Failed to save template", err);
-      alert("Failed to save template.");
+      showAlert(t('template_failed'));
     }
   };
 
@@ -141,9 +186,33 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleRenameRecent = useCallback(async (id: string, currentName: string) => {
+    const newName = await showPrompt(t('enter_new_name'), currentName);
+    if (newName && newName !== currentName) {
+      await db.updateRecentFileName(id, newName);
+      loadData();
+    }
+  }, [showPrompt, loadData]);
+
+  const getFilenameFromUrl = (url: string) => {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const filename = pathname.split('/').pop();
+      if (filename && filename.includes('.')) {
+        return filename;
+      }
+    } catch (e) {
+      // Invalid URL
+    }
+    const timestamp = new Date().getTime().toString().slice(-6);
+    return `${t('remote_file')}_${timestamp}`;
+  };
+
   const handleUrlSubmit = () => {
     if (urlInput.trim()) {
-      handleOpenDoc({ source: 'url', url: urlInput.trim(), name: "Remote File" });
+      const name = getFilenameFromUrl(urlInput.trim());
+      handleOpenDoc({ source: 'url', url: urlInput.trim(), name });
       setUrlInput('');
     }
   };
@@ -168,31 +237,31 @@ const App: React.FC = () => {
   };
 
   // --- Rendering ---
-  const config = createBaseConfig({
+  const config = useMemo(() => createBaseConfig({
     document: { permissions: { edit: true, download: true } },
     editorConfig: { lang: "zh", customization: { about: true, comments: false } }
-  });
+  }), []);
 
   const renderSidebar = () => (
     <div className="sidebar">
-      <h1>Office Viewer</h1>
+      <h1>{t('app_title')}</h1>
       <div 
         className={`nav-item ${view === 'home' || view === 'editor' ? 'active' : ''}`}
         onClick={() => setView('home')}
       >
-        Home
+        {t('nav_home')}
       </div>
       <div 
         className={`nav-item ${view === 'recent' ? 'active' : ''}`}
         onClick={() => setView('recent')}
       >
-        Recent Files
+        {t('nav_recent')}
       </div>
       <div 
         className={`nav-item ${view === 'templates' ? 'active' : ''}`}
         onClick={() => setView('templates')}
       >
-        Templates
+        {t('nav_templates')}
       </div>
     </div>
   );
@@ -201,64 +270,65 @@ const App: React.FC = () => {
     <div className="welcome-screen" onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
       {isDragging && (
         <div className="drop-overlay">
-          <div className="drop-overlay-content">Drop file here to open...</div>
+          <div className="drop-overlay-content">{t('drop_file')}</div>
         </div>
       )}
       
-      <h2>Welcome</h2>
+      <h2>{t('welcome')}</h2>
       
       <div className="section">
-        <h3>Create New</h3>
+        <h3>{t('create_new')}</h3>
         <div className="card-grid">
           <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'document.docx' })}>
             <div className="icon">📝</div>
-            <div className="title">Word Document</div>
+            <div className="title">{t('word_doc')}</div>
           </div>
           <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'spreadsheet.xlsx' })}>
             <div className="icon">📊</div>
-            <div className="title">Excel Workbook</div>
+            <div className="title">{t('excel_sheet')}</div>
           </div>
           <div className="card" onClick={() => handleOpenDoc({ source: 'new', name: 'presentation.pptx' })}>
             <div className="icon">📽️</div>
-            <div className="title">PowerPoint</div>
+            <div className="title">{t('ppt_pres')}</div>
           </div>
         </div>
       </div>
 
       <div className="section">
-        <h3>Open Existing</h3>
+        <h3>{t('open_existing')}</h3>
         <div className="quick-actions">
           <button onClick={() => document.getElementById('local-file')?.click()}>
-            Open Local File
+            {t('open_local')}
           </button>
           <input type="file" id="local-file" style={{ display: 'none' }} onChange={handleLocalFile} />
           
           <div style={{ display: 'flex', gap: '8px', flexGrow: 1, marginLeft: '16px' }}>
             <input 
               type="text" 
-              placeholder="Enter remote file URL..." 
+              placeholder={t('url_placeholder')} 
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
             />
-            <button className="secondary" onClick={handleUrlSubmit}>Open URL</button>
+            <button className="secondary" onClick={handleUrlSubmit}>{t('open_url')}</button>
           </div>
         </div>
       </div>
       
       {recentFiles.length > 0 && (
         <div className="section">
-          <h3>Recent</h3>
+          <h3>{t('recent')}</h3>
           <div className="card-grid">
             {recentFiles.slice(0, 4).map(file => (
               <div className="card" key={file.id} onClick={() => {
-                // If it's a URL source, we can reopen easily.
-                // If it's pure "local" name without URL/blob, we might not be able to immediately reopen
-                // due to browser security preventing auto-loading local paths without a picker.
                 if (file.source === 'url' && file.url) {
                   handleOpenDoc({ source: 'url', url: file.url, name: file.name });
+                } else if (file.source === 'local' && file.blob) {
+                  handleOpenDoc({ source: 'local', blob: file.blob, file: file.blob as File, name: file.name });
+                } else if (file.source === 'template' && file.blob) {
+                  handleOpenDoc({ source: 'template', blob: file.blob, name: file.name });
                 } else if (file.source === 'local') {
-                  alert("Local files cannot be reopened directly due to browser security restrictions. Please select the file again.");
+                  showAlert(t('open_local') + ": Browser security restrictions. Please select the file again.");
                 } else if (file.source === 'new') {
                    handleOpenDoc({ source: 'new', name: file.name });
                 }
@@ -276,17 +346,21 @@ const App: React.FC = () => {
 
   const renderRecentView = () => (
     <div className="welcome-screen">
-      <h2>Recent Files</h2>
+      <h2>{t('nav_recent')}</h2>
       <div className="list-view">
         {recentFiles.length === 0 ? (
-          <p>No recent files found.</p>
+          <p>{t('no_recent')}</p>
         ) : (
           recentFiles.map(file => (
             <div className="list-item" key={file.id} onClick={() => {
               if (file.source === 'url' && file.url) {
                 handleOpenDoc({ source: 'url', url: file.url, name: file.name });
+              } else if (file.source === 'local' && file.blob) {
+                handleOpenDoc({ source: 'local', blob: file.blob, file: file.blob as File, name: file.name });
+              } else if (file.source === 'template' && file.blob) {
+                handleOpenDoc({ source: 'template', blob: file.blob, name: file.name });
               } else if (file.source === 'local') {
-                alert("Local files cannot be reopened directly without file selection.");
+                showAlert(t('open_local') + ": Please select the file again.");
               } else if (file.source === 'new') {
                 handleOpenDoc({ source: 'new', name: file.name });
               }
@@ -294,13 +368,17 @@ const App: React.FC = () => {
               <div className="list-item-icon">📄</div>
               <div className="list-item-content">
                 <div className="list-item-title">{file.name}</div>
-                <div className="list-item-subtitle">{file.source.toUpperCase()} • {new Date(file.date).toLocaleString()}</div>
+                <div className="list-item-subtitle">{t('source_' + file.source)} • {new Date(file.date).toLocaleString()}</div>
               </div>
               <div className="list-item-actions">
                 <button className="secondary" onClick={(e) => {
                   e.stopPropagation();
+                  handleRenameRecent(file.id, file.name);
+                }}>{t('rename')}</button>
+                <button className="secondary" onClick={(e) => {
+                  e.stopPropagation();
                   db.deleteRecentFile(file.id).then(loadData);
-                }}>Remove</button>
+                }}>{t('remove')}</button>
               </div>
             </div>
           ))
@@ -311,27 +389,27 @@ const App: React.FC = () => {
 
   const renderTemplatesView = () => (
     <div className="welcome-screen">
-      <h2>Templates</h2>
+      <h2>{t('nav_templates')}</h2>
       
       <div className="section">
-        <h3>Custom Templates</h3>
+        <h3>{t('custom_templates')}</h3>
         <div className="card-grid">
           {customTemplates.length === 0 ? (
-            <p style={{ color: 'var(--text-secondary)' }}>No custom templates saved yet.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>{t('no_custom_templates')}</p>
           ) : (
             customTemplates.map(tpl => (
               <div className="card" key={tpl.id} onClick={() => {
-                handleOpenDoc({ source: 'template', blob: tpl.blob, name: `Untitled from ${tpl.name}`, templateId: tpl.id });
+                handleOpenDoc({ source: 'template', blob: tpl.blob, name: t( 'untitled', [tpl.name]), templateId: tpl.id });
               }}>
                 <div className="icon">📑</div>
                 <div className="title">{tpl.name}</div>
                 <div className="subtitle">
-                  <button className="secondary" style={{ marginTop: '8px', padding: '4px 8px', fontSize: '12px'}} onClick={(e) => {
+                  <button className="secondary" style={{ marginTop: '8px', padding: '4px 8px', fontSize: '12px'}} onClick={async (e) => {
                     e.stopPropagation();
-                    if(confirm("Delete this template?")) {
+                    if(await showConfirm(t('delete_template'))) {
                       db.deleteTemplate(tpl.id).then(loadData);
                     }
-                  }}>Delete</button>
+                  }}>{t('remove')}</button>
                 </div>
               </div>
             ))
@@ -340,7 +418,7 @@ const App: React.FC = () => {
       </div>
 
       <div className="section">
-        <h3>Preset Templates</h3>
+        <h3>{t('preset_templates')}</h3>
         <div className="card-grid">
           {PRESET_TEMPLATES.map(tpl => (
             <div className="card" key={tpl.id} onClick={() => {
@@ -351,10 +429,10 @@ const App: React.FC = () => {
               }
             }}>
               <div className="icon">
-                {tpl.type === 'docx' ? '📝' : tpl.type === 'xlsx' ? '📊' : '📽️'}
+                 {tpl.type === 'docx' ? '📝' : tpl.type === 'xlsx' ? '📊' : '📽️'}
               </div>
               <div className="title">{tpl.name}</div>
-              <div className="subtitle">System Preset</div>
+              <div className="subtitle">{t('system_preset')}</div>
             </div>
           ))}
         </div>
@@ -365,10 +443,10 @@ const App: React.FC = () => {
   const renderEditor = () => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="editor-header">
-        <button className="secondary" onClick={handleCloseEditor}>← Back</button>
+        <button className="secondary" onClick={handleCloseEditor}>← {t('back')}</button>
         <div className="editor-header-title">{activeDoc?.name || "Document"}</div>
-        <button className="secondary" onClick={handleSaveAsTemplate}>Save as Template</button>
-        <button onClick={handleSaveToDisk}>Download</button>
+        <button className="secondary" onClick={handleSaveAsTemplate}>{t('save_template')}</button>
+        <button onClick={handleSaveToDisk}>{t('download')}</button>
       </div>
       <div className="editor-container">
         <OnlyOfficeViewer
@@ -390,6 +468,15 @@ const App: React.FC = () => {
         {view === 'templates' && renderTemplatesView()}
         {view === 'editor' && renderEditor()}
       </div>
+
+      <Modal
+        isOpen={modalConfig.isOpen}
+        type={modalConfig.type}
+        message={modalConfig.message}
+        defaultValue={modalConfig.defaultValue}
+        onConfirm={handleModalConfirm}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
 };

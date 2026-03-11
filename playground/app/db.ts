@@ -113,9 +113,6 @@ class Database {
   async addRecentFile(recent: Omit<RecentFile, "id" | "date">): Promise<RecentFile> {
     await this.init();
     
-    // Check if we already have it to avoid duplicates (by name or url if applicable)
-    // For simplicity, we just add normally, but ideally we update the existing one's date.
-    // Let's do a basic deduplication.
     const allRecent = await this.getRecentFiles();
     const existing = allRecent.find(
       (r) => 
@@ -132,10 +129,45 @@ class Database {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["recent"], "readwrite");
       const store = transaction.objectStore("recent");
-      const request = store.put(newRecent); // put handles both insert and update
+      
+      const request = store.put(newRecent);
 
-      request.onsuccess = () => resolve(newRecent);
+      request.onsuccess = async () => {
+        // After adding, check if we need to trim the list to 10
+        const updatedList = await this.getRecentFiles(); // This is sorted by date desc
+        if (updatedList.length > 10) {
+          const toDelete = updatedList.slice(10);
+          const deleteTransaction = this.db!.transaction(["recent"], "readwrite");
+          const deleteStore = deleteTransaction.objectStore("recent");
+          for (const item of toDelete) {
+            deleteStore.delete(item.id);
+          }
+        }
+        resolve(newRecent);
+      };
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async updateRecentFileName(id: string, newName: string): Promise<void> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["recent"], "readwrite");
+      const store = transaction.objectStore("recent");
+      const getRequest = store.get(id);
+      
+      getRequest.onsuccess = () => {
+        const item = getRequest.result;
+        if (item) {
+          item.name = newName;
+          const updateRequest = store.put(item);
+          updateRequest.onsuccess = () => resolve();
+          updateRequest.onerror = () => reject(updateRequest.error);
+        } else {
+          resolve();
+        }
+      };
+      getRequest.onerror = () => reject(getRequest.error);
     });
   }
 
