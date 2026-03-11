@@ -7,6 +7,11 @@ on:
         description: 'GitHub Release Tag to deploy (e.g. v0.1.0)'
         required: true
         type: string
+      project_name:
+        description: 'Cloudflare Pages project name'
+        required: true
+        default: 'office'
+        type: string
 
 jobs:
   test-deploy:
@@ -46,4 +51,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=office
+          command: pages deploy dist --project-name=${{ inputs.project_name }}
