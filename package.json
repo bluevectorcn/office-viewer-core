@@ -35,8 +35,8 @@
     "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
-    "@vitejs/plugin-react": "^5.1.2",
-    "@vitejs/plugin-vue": "^6.0.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "@vitejs/plugin-vue": "^6.0.4",
     "@vitest/ui": "^4.0.18",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
@@ -45,9 +45,9 @@
     "prettier": "^3.8.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "tsx": "^4.19.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.4",
-    "vite": "^5.4.8",
+    "vite": "^7.3.1",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.18",
     "vue": "^3.5.27"
@@ -65,24 +65,24 @@
   "types": "./dist-lib/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist-lib/index.d.ts",
       "import": "./dist-lib/index.es.js",
-      "require": "./dist-lib/index.cjs.js",
-      "types": "./dist-lib/index.d.ts"
+      "require": "./dist-lib/index.cjs.js"
     },
     "./react": {
+      "types": "./dist-lib/react.d.ts",
       "import": "./dist-lib/react.es.js",
-      "require": "./dist-lib/react.cjs.js",
-      "types": "./dist-lib/react.d.ts"
+      "require": "./dist-lib/react.cjs.js"
     },
     "./vue": {
+      "types": "./dist-lib/vue.d.ts",
       "import": "./dist-lib/vue.es.js",
-      "require": "./dist-lib/vue.cjs.js",
-      "types": "./dist-lib/vue.d.ts"
+      "require": "./dist-lib/vue.cjs.js"
     },
     "./web-component": {
+      "types": "./dist-lib/web-component.d.ts",
       "import": "./dist-lib/web-component.es.js",
-      "require": "./dist-lib/web-component.cjs.js",
-      "types": "./dist-lib/web-component.d.ts"
+      "require": "./dist-lib/web-component.cjs.js"
     },
     "./playground": "./playground/index.html"
   },
