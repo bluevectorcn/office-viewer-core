@@ -20,6 +20,8 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "office-viewer-core": ["./src/index.ts"],
+      "office-viewer-core/*": ["./src/*"],
       "@/*": [
         "src/*"
       ]
@@ -27,6 +29,7 @@
   },
   "include": [
     "src",
+    "playground",
     "scripts",
     "wasm",
     "vite.config.ts"
