@@ -26,7 +26,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "type-check": "tsc --noEmit",
-    "release": "pnpm build:lib && npm version patch && npm publish"
+    "release": "pnpm build:lib && npm version patch && npm publish --registry=https://registry.npmjs.org"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
