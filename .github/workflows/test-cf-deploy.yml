@@ -46,6 +46,9 @@ jobs:
             exit 1
           fi
 
+      - name: Cleanup redundant wasm
+        run: rm -f dist/vendor/onlyoffice/x2t/x2t.wasm
+
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
