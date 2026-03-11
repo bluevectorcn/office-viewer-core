@@ -4,8 +4,8 @@ submodules
 vendor
 dist
 dist-lib
-fonts/*.ttf
-fonts/*.otf
+# fonts/*.ttf
+# fonts/*.otf
 wasm/x2t/x2t.js
 wasm/x2t/x2t.wasm
 CLAUDE.md
