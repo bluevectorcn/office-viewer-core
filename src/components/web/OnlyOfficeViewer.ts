@@ -166,13 +166,14 @@ export class OnlyOfficeViewer extends HTMLElement implements IEditor {
    * Initialize the editor with configuration
    */
   public async init(config: DocEditorConfig): Promise<void> {
+    this.destroy(); // Cleanup existing if any
+    
     this._config = config;
     
     // Initialize i18n early
     I18nManager.getInstance().init(this._config.editorConfig?.lang, this._config.translations);
 
     this.ensureDom();
-    this.destroy(); // Cleanup existing if any
     
     // Apply attributes if not in config
     const attrPrefix = this.getAttribute("assets-prefix");

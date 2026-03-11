@@ -110,6 +110,9 @@ export class EditorFactory {
     // 8. 创建 DocsAPI 编辑器实例的引用
     let docEditorInstance: any = null;
 
+    // Implement destroy first so it's available in the closure
+    let isDestroyed = false;
+
     // 9. 实现打开文档的完整流程（包括加载 DocsAPI）
     const openDocument = async (input: EditorInput): Promise<void> => {
       const notifyLoading = (type: LoadingType, message: string, progress?: number) => {
@@ -122,12 +125,22 @@ export class EditorFactory {
 
         // 初始化 DocsAPI 和 X2T
         await loadDocsApi();
+        if (isDestroyed) return;
+
         await initX2TModule();
+        if (isDestroyed) return;
 
         notifyLoading('converting', t('processing_document'));
 
         // 使用编排器打开文档
+        // 检查状态，如果已释放则不继续
+        if (orchestrator.getCurrentState() === 'disposed') {
+          logger.warn('Orchestrator disposed during initialization, aborting open');
+          return;
+        }
+
         await orchestrator.open(input);
+        if (isDestroyed) return;
 
         // 获取会话信息
         const session = orchestrator.getCurrentSession();
@@ -173,6 +186,7 @@ export class EditorFactory {
         notifyLoading('initing', t('initializing_editor'));
 
         // 创建 DocsAPI 编辑器实例
+        if (isDestroyed) return;
         docEditorInstance = new window.DocsAPI!.DocEditor(hostId, config);
         downloadManager.setEditorInstance(docEditorInstance);
 
@@ -181,6 +195,10 @@ export class EditorFactory {
 
         logger.info('Document opened and editor ready');
       } catch (error) {
+        if (isDestroyed) {
+          logger.warn('Error occurred after destruction, suppressing', error);
+          return;
+        }
         logger.error('Failed to open document', error);
         notifyLoading('error', error instanceof Error ? error.message : t('unknown_error'));
         throw error;
@@ -195,6 +213,9 @@ export class EditorFactory {
 
     // 11. 实现 destroy
     const destroy = (): void => {
+      if (isDestroyed) return;
+      isDestroyed = true;
+
       logger.info('Destroying editor');
 
       // 销毁 DocsAPI 编辑器
@@ -220,6 +241,8 @@ export class EditorFactory {
 
     // 12. 自动打开配置中的文档
     setTimeout(() => {
+      if (isDestroyed) return;
+      
       if (orchestrator.getCurrentSession()) {
         logger.debug('Session already active, skipping auto-open');
         return;

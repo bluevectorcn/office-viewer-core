@@ -40,6 +40,38 @@ describe('Logger', () => {
     expect(entries[0].metadata).toEqual({ code: 'WARN_001' });
   });
 
+  it('should log warnings with Error objects', () => {
+    const entries: LogEntry[] = [];
+    logger.onLog((entry) => entries.push(entry));
+
+    const error = new Error('Warn error');
+    logger.warn('Warning occurred', error);
+
+    expect(entries[0].level).toBe('warn');
+    expect(entries[0].metadata?.error).toHaveProperty('message', 'Warn error');
+  });
+
+  it('should log info with Error objects', () => {
+    const entries: LogEntry[] = [];
+    logger.onLog((entry) => entries.push(entry));
+
+    const error = new Error('Info error');
+    logger.info('Info occurred', error);
+
+    expect(entries[0].level).toBe('info');
+    expect(entries[0].metadata?.error).toHaveProperty('message', 'Info error');
+  });
+
+  it('should log debug with non-object metadata', () => {
+    const entries: LogEntry[] = [];
+    logger.onLog((entry) => entries.push(entry));
+
+    logger.debug('Debug message', 123);
+
+    expect(entries[0].level).toBe('debug');
+    expect(entries[0].metadata).toEqual({ data: 123 });
+  });
+
   it('should log errors with Error objects', () => {
     const entries: LogEntry[] = [];
     logger.onLog((entry) => entries.push(entry));

@@ -85,41 +85,54 @@ export class Logger {
   /**
    * 记录调试信息
    */
-  debug(message: string, metadata?: Record<string, unknown>): void {
-    this.log('debug', message, metadata);
+  debug(message: string, metadataOrError?: unknown): void {
+    this.log('debug', message, this.formatMetadata(metadataOrError));
   }
 
   /**
    * 记录一般信息
    */
-  info(message: string, metadata?: Record<string, unknown>): void {
-    this.log('info', message, metadata);
+  info(message: string, metadataOrError?: unknown): void {
+    this.log('info', message, this.formatMetadata(metadataOrError));
   }
 
   /**
    * 记录警告
    */
-  warn(message: string, metadata?: Record<string, unknown>): void {
-    this.log('warn', message, metadata);
+  warn(message: string, metadataOrError?: unknown): void {
+    this.log('warn', message, this.formatMetadata(metadataOrError));
   }
 
   /**
    * 记录错误
    */
   error(message: string, error?: unknown): void {
-    const metadata: Record<string, unknown> = {};
+    this.log('error', message, this.formatMetadata(error));
+  }
 
-    if (error instanceof Error) {
-      metadata.error = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      };
-    } else if (error !== undefined) {
-      metadata.error = error;
+  /**
+   * 格式化元数据或错误对象
+   */
+  private formatMetadata(metadataOrError?: unknown): Record<string, unknown> | undefined {
+    if (metadataOrError === undefined || metadataOrError === null) {
+      return undefined;
     }
 
-    this.log('error', message, metadata);
+    if (metadataOrError instanceof Error) {
+      return {
+        error: {
+          name: metadataOrError.name,
+          message: metadataOrError.message,
+          stack: metadataOrError.stack
+        }
+      };
+    }
+
+    if (typeof metadataOrError === 'object') {
+      return metadataOrError as Record<string, unknown>;
+    }
+
+    return { data: metadataOrError };
   }
 
   /**
