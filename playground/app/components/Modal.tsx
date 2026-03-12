@@ -58,11 +58,11 @@ const Modal: React.FC<ModalProps> = ({
         <div className="modal-actions">
           {(type === 'confirm' || type === 'prompt') && (
             <button className="secondary" onClick={onCancel}>
-              {t('remove') === '移除' ? '取消' : 'Cancel'}
+              {t('cancel')}
             </button>
           )}
           <button onClick={handleConfirm}>
-            {t('remove') === '移除' ? '确定' : 'OK'}
+            {t('confirm')}
           </button>
         </div>
       </div>
