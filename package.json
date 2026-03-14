@@ -2,6 +2,10 @@
   "name": "office-viewer-core",
   "version": "0.1.3",
   "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jacktea/office-viewer-core.git"
+  },
   "type": "module",
   "onlyoffice": {
     "version": "9.3.0.83",
@@ -25,7 +29,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "type-check": "tsc --noEmit",
-    "release": "pnpm build:lib && npm version patch && npm publish --registry=https://registry.npmjs.org"
+    "release": "pnpm build:lib && npm publish --registry=https://registry.npmjs.org"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
