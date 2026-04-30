@@ -1,34 +1,70 @@
-import { handleSaveLikeRequest, shouldInterceptUrl } from "../../application/handlers/SaveCommandHandler";
+import {
+  handleSaveLikeRequest,
+  shouldInterceptUrl,
+} from "../../application/handlers/SaveCommandHandler";
+import {
+  handleImageUploadRequest,
+  shouldInterceptImageUploadUrl,
+} from "../../application/handlers/ImageUploadCommandHandler";
 
 const endpointPatchedWindows = new WeakSet<Window>();
 const endpointPatchKey = "__ooLocalEndpointPatch";
 
-function setXhrResponse(xhr: XMLHttpRequest, responseText: string) {
-  const setReadonly = (key: keyof XMLHttpRequest, value: unknown) => {
+function setReadonly(xhr: XMLHttpRequest, key: keyof XMLHttpRequest, value: unknown) {
+  try {
+    Object.defineProperty(xhr, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => value,
+    });
+  } catch {
     try {
-      Object.defineProperty(xhr, key, {
-        configurable: true,
-        enumerable: true,
-        get: () => value,
-      });
+      (xhr as any)[key] = value;
     } catch {
-      try {
-        (xhr as any)[key] = value;
-      } catch {
-        // Ignore assignment failures on read-only properties.
-      }
+      // Ignore assignment failures on read-only properties.
     }
-  };
+  }
+}
 
-  setReadonly("readyState", 4);
-  setReadonly("status", 200);
-  setReadonly("statusText", "OK");
-  setReadonly("responseText", responseText);
-  setReadonly("response", responseText);
+function setXhrResponse(xhr: XMLHttpRequest, responseText: string) {
+  setReadonly(xhr, "readyState", 4);
+  setReadonly(xhr, "status", 200);
+  setReadonly(xhr, "statusText", "OK");
+  setReadonly(xhr, "responseText", responseText);
+  setReadonly(xhr, "response", responseText);
 
   xhr.getAllResponseHeaders = () => "content-type: application/json\r\n";
   xhr.getResponseHeader = (name: string) =>
     name.toLowerCase() === "content-type" ? "application/json" : null;
+}
+
+async function getRequestBody(input: RequestInfo | URL, init?: RequestInit) {
+  if (init && "body" in init) {
+    return init.body;
+  }
+  if (input && typeof input === "object" && "clone" in input && "headers" in input) {
+    const cloned = input.clone();
+    const contentType = cloned.headers.get("content-type")?.toLowerCase() ?? "";
+    if (contentType.includes("multipart/form-data")) {
+      return cloned.formData();
+    }
+    if (contentType.includes("application/json") || contentType.startsWith("text/")) {
+      return cloned.text();
+    }
+    return cloned.blob();
+  }
+  return undefined;
+}
+
+function dispatchXhrEvent(xhr: XMLHttpRequest, type: string) {
+  try {
+    xhr.dispatchEvent(new ProgressEvent(type));
+  } catch {
+    const handler = (xhr as unknown as Record<string, unknown>)[`on${type}`];
+    if (typeof handler === "function") {
+      handler.call(xhr, new ProgressEvent(type));
+    }
+  }
 }
 
 export function installLocalEndpointPatch(targetWindow: Window) {
@@ -41,8 +77,20 @@ export function installLocalEndpointPatch(targetWindow: Window) {
   if (fetchRef) {
     targetWindow.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (shouldInterceptImageUploadUrl(targetWindow, url)) {
+        const body = await getRequestBody(input, init);
+        const result = await handleImageUploadRequest(targetWindow, url, body);
+        if (result) {
+          return new Response(JSON.stringify(result), {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          });
+        }
+      }
       if (shouldInterceptUrl(targetWindow, url)) {
-        const body = init?.body;
+        const body = await getRequestBody(input, init);
         const result = await handleSaveLikeRequest(targetWindow, url, body);
         if (result) {
           return new Response(JSON.stringify(result), {
@@ -85,13 +133,18 @@ export function installLocalEndpointPatch(targetWindow: Window) {
     body?: Document | XMLHttpRequestBodyInit | null
   ) {
     const url = this.__ooUrl;
-    if (!url || !shouldInterceptUrl(targetWindow, url)) {
+    if (
+      !url ||
+      (!shouldInterceptUrl(targetWindow, url) && !shouldInterceptImageUploadUrl(targetWindow, url))
+    ) {
       return send.call(this, body);
     }
 
     void (async () => {
       try {
-        const result = await handleSaveLikeRequest(targetWindow, url, body);
+        const result = shouldInterceptImageUploadUrl(targetWindow, url)
+          ? await handleImageUploadRequest(targetWindow, url, body)
+          : await handleSaveLikeRequest(targetWindow, url, body);
         if (!result) {
           send.call(this, body);
           return;
@@ -99,8 +152,9 @@ export function installLocalEndpointPatch(targetWindow: Window) {
         const responseText = JSON.stringify(result);
         setXhrResponse(this, responseText);
         queueMicrotask(() => {
-          this.onreadystatechange?.call(this, new ProgressEvent("readystatechange"));
-          this.onload?.call(this, new ProgressEvent("load"));
+          dispatchXhrEvent(this, "readystatechange");
+          dispatchXhrEvent(this, "load");
+          dispatchXhrEvent(this, "loadend");
         });
       } catch (error) {
         console.error("Local save handler failed", error);
@@ -109,4 +163,3 @@ export function installLocalEndpointPatch(targetWindow: Window) {
     })();
   };
 }
-

@@ -1,7 +1,8 @@
-import { getDocumentAssets } from "./AssetsStore";
+import { getDocumentAssets, registerDocumentImageAsset } from "./AssetsStore";
 import { SocketRegistry } from "@/infrastructure/socket/SocketRegistry";
 import { AsyncLock } from "@/shared/concurrency/AsyncLock";
 import { ImagePathNormalizer } from "@/shared/utils/ImagePathNormalizer";
+import { createId } from "@/shared/utils/LifecycleHelpers";
 
 declare const __ONLYOFFICE_VERSION__: string;
 declare const __ONLYOFFICE_BUILD_NUMBER__: number;
@@ -237,16 +238,43 @@ export class FakeSocket {
       message.data && typeof message.data === "object" && !Array.isArray(message.data)
         ? (message.data as Record<string, unknown>)
         : null;
+    const nestedMessage =
+      message.message && typeof message.message === "object" && !Array.isArray(message.message)
+        ? (message.message as Record<string, unknown>)
+        : null;
     const command =
       typeof message.c === "string"
         ? message.c
+        : typeof nestedMessage?.c === "string"
+          ? (nestedMessage.c as string)
         : typeof nestedData?.c === "string"
           ? (nestedData.c as string)
           : undefined;
 
     if (command === "imgurls") {
-      const imgMessage = nestedData ? { ...nestedData, id: message.id ?? nestedData.id } : message;
-      this.handleImageUrls(imgMessage);
+      const imgMessage = nestedMessage
+        ? { ...nestedMessage, id: nestedMessage.id ?? message.id }
+        : nestedData
+          ? { ...nestedData, id: nestedData.id ?? message.id }
+          : message;
+      void this.handleImageUrls(imgMessage);
+      return;
+    }
+
+    if (command && command.toLowerCase() === "insertimage") {
+      const payload = nestedData || nestedMessage || message.data || {};
+      // Wrap the response in 'documentOpen' so that OnlyOffice's
+      // CoAuthoringApi.onDocumentOpen routes it to api.fCurCallback.
+      this.emitLocal("message", {
+        type: "documentOpen",
+        data: {
+          type: command,
+          c: command,
+          status: "ok",
+          id: message.id,
+          data: payload,
+        }
+      });
       return;
     }
 
@@ -260,7 +288,7 @@ export class FakeSocket {
         this.emitDocumentOpen();
         break;
       case "imgurls":
-        this.handleImageUrls(message);
+        void this.handleImageUrls(message);
         break;
       case "getLock":
         // 修复：使用 AsyncLock 保护锁操作的原子性
@@ -377,8 +405,9 @@ export class FakeSocket {
     });
   }
 
-  private handleImageUrls(message: Record<string, unknown>) {
-    const assets = this.getAssets();
+  private async handleImageUrls(message: Record<string, unknown>) {
+    const docId = this.getAssetsDocId(message);
+    const assets = this.getAssets(docId);
     const images = assets?.images ?? {};
     const rawList = Array.isArray(message.data)
       ? message.data
@@ -386,35 +415,72 @@ export class FakeSocket {
         ? (message.data as { data: unknown[] }).data
         : Array.isArray((message.data as { urls?: unknown })?.urls)
           ? (message.data as { urls: unknown[] }).urls
-        : [];
-    const urls = rawList.flatMap((entry) => {
-      const name =
-        typeof entry === "string"
-          ? entry
-          : entry && typeof entry === "object" && "path" in entry
-            ? String((entry as { path?: unknown }).path ?? "")
-            : String(entry ?? "");
-      const normalized = normalizeImagePath(name);
-      const url = resolveImageUrl(images, name, normalized);
-      const base = { url: url ?? null, path: normalized };
-      if (normalized !== name) {
-        return [base, { url: url ?? null, path: name }];
-      }
-      return [base];
-    });
+          : [];
+    const urlsArray = (
+      await Promise.all(
+        rawList.map(async (entry) => {
+          const name =
+            typeof entry === "string"
+              ? entry
+              : entry && typeof entry === "object" && "path" in entry
+                ? String((entry as { path?: unknown }).path ?? "")
+                : String(entry ?? "");
+          const normalized = normalizeImagePath(name);
+          const url = resolveImageUrl(images, name, normalized);
+          if (!url && docId && isFetchableImageUrl(name)) {
+            const remote = await fetchAndRegisterRemoteImage(docId, name);
+            if (remote) {
+              return remote.path === name
+                ? [remote]
+                : [
+                    { path: name, url: remote.url },
+                    remote,
+                  ];
+            }
+          } else if (!url && !docId && isFetchableImageUrl(name)) {
+            console.warn("[OnlyOffice] Image URL import skipped: document assets not found", {
+              imageUrl: name,
+              messageId: message.id,
+            });
+          }
 
+          const base = { url: url ?? null, path: normalized };
+          if (normalized !== name) {
+            return [base, { url: url ?? null, path: name }];
+          }
+          return [base];
+        })
+      )
+    ).flat();
+
+    // OnlyOffice expects an array of { path: string, url: string | null }
+    // It will iterate using data.length and expects data[i].path and data[i].url
+    const urls = urlsArray.map((curr) => ({
+      path: curr.path,
+      url: curr.url,
+    }));
+
+    // Wrap the response in 'documentOpen' so that OnlyOffice's
+    // CoAuthoringApi.onDocumentOpen routes it to api.fCurCallback.
     this.emitLocal("message", {
-      type: "imgurls",
-      status: "ok",
-      id: message.id,
+      type: "documentOpen",
       data: {
-        urls,
-        error: 0,
-      },
+        type: "imgurls",
+        ...(message.c ? { c: message.c } : {}),
+        status: "ok",
+        id: message.id,
+        data: {
+          urls,
+          error: 0,
+        },
+      }
     });
   }
 
-  private getAssets() {
+  private getAssets(docId?: string) {
+    if (docId) {
+      return getDocumentAssets(docId);
+    }
     if (this.openCmd?.id) {
       return getDocumentAssets(this.openCmd.id);
     }
@@ -428,6 +494,21 @@ export class FakeSocket {
       return getDocumentAssets(this.openCmd.url);
     }
     return undefined;
+  }
+
+  private getAssetsDocId(message?: Record<string, unknown>) {
+    const candidates = [
+      typeof message?.id === "string" ? message.id : undefined,
+      typeof message?.key === "string" ? message.key : undefined,
+      typeof message?.docId === "string" ? message.docId : undefined,
+      typeof message?.docid === "string" ? message.docid : undefined,
+      this.openCmd?.id,
+      this.openCmd?.key,
+      this.openCmd?.docId,
+      this.openCmd?.url,
+    ].filter((value): value is string => !!value);
+
+    return candidates.find((candidate) => !!getDocumentAssets(candidate)) ?? "";
   }
 
   /**
@@ -534,4 +615,143 @@ function resolveImageUrl(
     if (images[withMedia]) return images[withMedia];
   }
   return null;
+}
+
+function isFetchableImageUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "data:"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function fetchAndRegisterRemoteImage(docId: string, imageUrl: string) {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.warn("[OnlyOffice] Image URL import failed: download returned error", {
+        docId,
+        imageUrl,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return null;
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.byteLength) {
+      console.warn("[OnlyOffice] Image URL import failed: empty response", { docId, imageUrl });
+      return null;
+    }
+
+    const contentType =
+      response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+    const ext =
+      extensionFromMime(contentType) ||
+      extensionFromUrl(imageUrl) ||
+      extensionFromBytes(bytes) ||
+      "bin";
+    const imagePath = `media/${createId("image")}.${ext}`;
+    const blobBytes = new Uint8Array(bytes.byteLength);
+    blobBytes.set(bytes);
+    const objectUrl = URL.createObjectURL(
+      new Blob([blobBytes], {
+        type: contentType || mimeFromExtension(ext),
+      })
+    );
+
+    const registered = registerDocumentImageAsset(docId, imagePath, objectUrl, bytes);
+    if (!registered) {
+      URL.revokeObjectURL(objectUrl);
+      console.warn("[OnlyOffice] Image URL import failed: asset registration failed", {
+        docId,
+        imageUrl,
+        imagePath,
+      });
+      return null;
+    }
+
+    return { path: imagePath, url: objectUrl };
+  } catch (error) {
+    console.warn("[OnlyOffice] Image URL import failed: download threw", {
+      docId,
+      imageUrl,
+      error,
+    });
+    return null;
+  }
+}
+
+function extensionFromMime(type: string) {
+  const map: Record<string, string> = {
+    "image/bmp": "bmp",
+    "image/gif": "gif",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+    "image/x-icon": "ico",
+    "image/vnd.microsoft.icon": "ico",
+  };
+  return map[type] ?? "";
+}
+
+function extensionFromUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    const match = parsed.pathname.toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function extensionFromBytes(bytes: Uint8Array) {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "jpg";
+  }
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38
+  ) {
+    return "gif";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return "bmp";
+  }
+  return "";
+}
+
+function mimeFromExtension(ext: string) {
+  const map: Record<string, string> = {
+    bmp: "image/bmp",
+    gif: "image/gif",
+    ico: "image/x-icon",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    svg: "image/svg+xml",
+    webp: "image/webp",
+  };
+  return map[ext] ?? "application/octet-stream";
 }

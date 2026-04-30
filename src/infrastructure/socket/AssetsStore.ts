@@ -102,6 +102,40 @@ export function getDocumentAssets(docId: string): DocumentAssets | undefined {
 }
 
 /**
+ * 注册编辑过程中新增的图片资源。
+ */
+export function registerDocumentImageAsset(
+  docId: string,
+  imagePath: string,
+  url: string,
+  data: Uint8Array
+) {
+  const assets = assetsStore.get(docId);
+  if (!assets) {
+    logger.warn('registerDocumentImageAsset: assets not found', { docId, imagePath });
+    return false;
+  }
+
+  const manager = getOrCreateResourceManager(docId);
+  manager.registerObjectUrl(url);
+
+  assets.images[imagePath] = url;
+  if (!assets.mediaData) {
+    assets.mediaData = {};
+  }
+  assets.mediaData[imagePath] = data;
+
+  logger.debug('Image asset registered', {
+    docId,
+    imagePath,
+    size: data.byteLength,
+    imageCount: Object.keys(assets.images).length,
+  });
+
+  return true;
+}
+
+/**
  * 注册下载 URL
  * 会清理旧的下载 URL 并注册新的
  */
