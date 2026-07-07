@@ -9,3 +9,4 @@ CLAUDE.md
 .claude
 plugins/*.plugin
 .DS_Store
+.worktree/
