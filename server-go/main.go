@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/rakyll/magicmime"
 )
 
 // 并发队列配置
@@ -33,6 +34,12 @@ func init() {
 }
 
 func main() {
+	// 初始化 magicmime
+	if err := magicmime.Open(magicmime.MAGIC_MIME_TYPE); err != nil {
+		log.Fatalf("Failed to open magicmime: %v", err)
+	}
+	defer magicmime.Close()
+
 	// 允许通过环境变量修改配置
 	if envMax := os.Getenv("MAX_CONCURRENT_TASKS"); envMax != "" {
 		var val int
@@ -120,16 +127,37 @@ func handleConvert(c *gin.Context) {
 		return
 	}
 
-	// 3. 保存上传的原始文档文件
-	ext := filepath.Ext(title)
-	if ext == "" {
-		ext = ".docx" // 默认回退
+	// 3. 保存上传的原始文档文件到临时路径进行类型检测
+	tmpUploadPath := filepath.Join(workDir, "upload_tmp")
+	if err := c.SaveUploadedFile(file, tmpUploadPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+		return
 	}
+
+	// 使用 magicmime 检测文件类型
+	var ext string
+	if mimeType, err := magicmime.TypeByFile(tmpUploadPath); err == nil {
+		ext = mimeToExt(mimeType)
+		log.Printf("[Task %s] Detected MIME type: %s, mapped extension: %s\n", taskId, mimeType, ext)
+	} else {
+		log.Printf("[Task %s] Failed to detect MIME type: %v\n", taskId, err)
+	}
+
+	// 如果 magicmime 没有检测出有效后缀，则回退到原文件名的后缀
+	if ext == "" {
+		ext = filepath.Ext(title)
+	}
+	// 如果依然为空，则回退到默认的 .docx
+	if ext == "" {
+		ext = ".docx"
+	}
+
 	inputFileName := "document" + ext
 	inputFilePath := filepath.Join(workDir, inputFileName)
 
-	if err := c.SaveUploadedFile(file, inputFilePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+	// 重命名临时文件到正确的输入路径
+	if err := os.Rename(tmpUploadPath, inputFilePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename uploaded file to target extension"})
 		return
 	}
 
@@ -137,9 +165,24 @@ func handleConvert(c *gin.Context) {
 	outputFilePath := filepath.Join(workDir, "Editor.bin")
 	paramsPath := filepath.Join(workDir, "params.xml")
 
-	// 构建字体和主题目录（若本地有部署，可按实际路径配置。在此使用空目录或宿主环境配置）
+	// 构建字体和主题目录，并转化为绝对路径以供外部 x2t 使用
 	fontDir := filepath.Join(".", "assets", "fonts") + string(filepath.Separator)
-	themeDir := filepath.Join(".", "assets", "themes")
+	themeDir := filepath.Join(".", "sdkjs", "slide", "themes")
+
+	absFontDir, err := filepath.Abs(fontDir)
+	if err == nil {
+		absFontDir = absFontDir + string(filepath.Separator)
+	} else {
+		absFontDir = fontDir
+	}
+
+	absThemeDir, err := filepath.Abs(themeDir)
+	if err != nil {
+		absThemeDir = themeDir
+	}
+
+	formatFrom := getAvsFormatFrom(ext)
+	formatTo := getAvsFormatTo(ext)
 
 	paramsContent := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
 <TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
@@ -147,11 +190,21 @@ func handleConvert(c *gin.Context) {
   <m_sThemeDir>%s</m_sThemeDir>
   <m_sFileFrom>%s</m_sFileFrom>
   <m_sFileTo>%s</m_sFileTo>
-  <m_bIsNoBase64>false</m_bIsNoBase64>
-  <m_nCsvTxtEncoding>65001</m_nCsvTxtEncoding>
-  <m_nCsvDelimiter>4</m_nCsvDelimiter>
-  <m_sCsvDelimiterChar>,</m_sCsvDelimiterChar>
-</TaskQueueDataConvert>`, fontDir, themeDir, inputFilePath, outputFilePath)
+  <m_nFormatFrom>%s</m_nFormatFrom>
+  <m_nFormatTo>%s</m_nFormatTo>
+  <m_bIsNoBase64>true</m_bIsNoBase64>
+  <m_oInputLimits>
+    <m_oInputLimit type="docx;dotx;docm;dotm">
+      <m_oZip uncompressed="52428800" template="*.xml" />
+    </m_oInputLimit>
+    <m_oInputLimit type="xlsx;xltx;xlsm;xltm">
+      <m_oZip uncompressed="302428800" template="*.xml" />
+    </m_oInputLimit>
+    <m_oInputLimit type="pptx;ppsx;potx;pptm;ppsm;potm">
+      <m_oZip uncompressed="52428800" template="*.xml" />
+    </m_oInputLimit>
+  </m_oInputLimits>
+</TaskQueueDataConvert>`, absFontDir, absThemeDir, inputFilePath, outputFilePath, formatFrom, formatTo)
 
 	if err := os.WriteFile(paramsPath, []byte(paramsContent), 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate parameters file"})
@@ -209,11 +262,50 @@ func handleConvert(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"taskId":       taskId,
-		"documentType": inferDocumentType(title),
+		"documentType": inferDocumentType(inputFileName),
 		"fileType":     strings.TrimPrefix(ext, "."),
 		"editorBinUrl": fmt.Sprintf("%s://%s/static/%s/Editor.bin", scheme, host, taskId),
 		"images":       images,
 	})
+}
+
+// mimeToExt 将 MIME 类型映射为已知的文件后缀名
+func mimeToExt(mimeType string) string {
+	parts := strings.Split(mimeType, ";")
+	mime := strings.TrimSpace(strings.ToLower(parts[0]))
+
+	switch mime {
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		return ".docx"
+	case "application/msword":
+		return ".doc"
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		return ".xlsx"
+	case "application/vnd.ms-excel":
+		return ".xls"
+	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+		return ".pptx"
+	case "application/vnd.ms-powerpoint":
+		return ".ppt"
+	case "application/pdf":
+		return ".pdf"
+	case "application/vnd.oasis.opendocument.text":
+		return ".odt"
+	case "application/vnd.oasis.opendocument.spreadsheet":
+		return ".ods"
+	case "application/vnd.oasis.opendocument.presentation":
+		return ".odp"
+	case "text/csv":
+		return ".csv"
+	case "text/plain":
+		return ".txt"
+	case "text/rtf", "application/rtf":
+		return ".rtf"
+	case "application/epub+zip":
+		return ".epub"
+	default:
+		return ""
+	}
 }
 
 // inferDocumentType 推断文档大类
@@ -273,3 +365,70 @@ func startCleanupTimer(interval time.Duration) {
 		}
 	}
 }
+
+// getAvsFileType maps a file extension to OnlyOffice AvsFileType integer
+// getAvsFormatFrom maps file extension to OnlyOffice AvsFileType hex string
+func getAvsFormatFrom(ext string) string {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+	switch normalized {
+	// Word (Document)
+	case "docx":
+		return "0x0041"
+	case "doc":
+		return "0x0042"
+	case "odt":
+		return "0x0043"
+	case "rtf":
+		return "0x0044"
+	case "txt":
+		return "0x0045"
+	case "html", "htm":
+		return "0x0046"
+	case "epub":
+		return "0x0048"
+
+	// Slide (Presentation)
+	case "pptx":
+		return "0x0081"
+	case "ppt":
+		return "0x0082"
+
+	// Cell (Spreadsheet)
+	case "xlsx":
+		return "0x0101"
+	case "xls":
+		return "0x0102"
+	case "csv":
+		return "0x0104"
+
+	// PDF
+	case "pdf":
+		return "0x0201"
+
+	default:
+		return "0x0000"
+	}
+}
+
+// getAvsFormatTo maps file extension to Canvas rendering format hex string based on document classes
+func getAvsFormatTo(ext string) string {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+	switch normalized {
+	// doc, docx 等 word 类
+	case "doc", "docx", "odt", "rtf", "txt", "html", "htm", "epub":
+		return "0x2001"
+	// xls, xlsx 等 excel 类
+	case "xls", "xlsx", "ods", "csv":
+		return "0x2002"
+	// ppt, pptx 等 ppt 类
+	case "ppt", "pptx", "odp":
+		return "0x2003"
+	// pdf 类统一使用 0x2001
+	case "pdf":
+		return "0x2001"
+	default:
+		return "0x2001"
+	}
+}
+
+

@@ -69,6 +69,11 @@ const translations: Record<string, Record<string, string>> = {
     'open_recents': 'Open recent list',
     'recents_empty_hint': 'Open a local file or save a template to start building history.',
     'templates_empty_hint': 'Save the current document as a template to see it here.',
+    'transcode_mode': 'Transcoding Mode',
+    'mode_wasm': 'Pure Frontend (WASM)',
+    'mode_server': 'Backend Service (Go API)',
+    'mode_auto': 'Auto Mode (Backend first)',
+    'backend_url': 'Backend URL',
   },
   zh: {
     'app_title': 'Atlas Office',
@@ -140,6 +145,11 @@ const translations: Record<string, Record<string, string>> = {
     'open_recents': '查看最近',
     'recents_empty_hint': '先打开一个本地文件或保存一个模板，这里才会有历史记录。',
     'templates_empty_hint': '把当前文档存为模板后，这里会显示出来。',
+    'transcode_mode': '转码模式',
+    'mode_wasm': '纯前端转码 (WASM)',
+    'mode_server': '后端服务转码 (Go API)',
+    'mode_auto': '自动降级 (优先后端)',
+    'backend_url': '后端服务地址',
   }
 };
 

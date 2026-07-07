@@ -273,6 +273,36 @@ function BrandMark() {
 }
 
 function App() {
+  const [transcodeMode, setTranscodeMode] = useState<'wasm' | 'server' | 'auto'>(() => {
+    return (localStorage.getItem('playground_transcode_mode') as any) || 'wasm';
+  });
+  const [backendUrl, setBackendUrl] = useState(() => {
+    return localStorage.getItem('playground_backend_url') || 'http://localhost:3000';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('playground_transcode_mode', transcodeMode);
+  }, [transcodeMode]);
+
+  useEffect(() => {
+    localStorage.setItem('playground_backend_url', backendUrl);
+  }, [backendUrl]);
+
+  const viewerConfig = React.useMemo(() => {
+    return createBaseConfig({
+      document: { permissions: { edit: true, download: true } },
+      editorConfig: {
+        lang: 'zh',
+        customization: {
+          about: true,
+          comments: false,
+        },
+      },
+      mode: transcodeMode,
+      backendUrl: transcodeMode !== 'wasm' ? backendUrl : undefined,
+    });
+  }, [transcodeMode, backendUrl]);
+
   const [view, setView] = useState<ViewState>('home');
   const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
@@ -873,6 +903,39 @@ function App() {
             </button>
           </nav>
 
+          <div className="sidebar-settings">
+            <div className="sidebar-settings-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <span>{t('transcode_mode')}</span>
+            </div>
+            <div className="setting-field">
+              <select
+                className="setting-select"
+                value={transcodeMode}
+                onChange={(e) => setTranscodeMode(e.target.value as any)}
+              >
+                <option value="wasm">{t('mode_wasm')}</option>
+                <option value="server">{t('mode_server')}</option>
+                <option value="auto">{t('mode_auto')}</option>
+              </select>
+            </div>
+            {transcodeMode !== 'wasm' && (
+              <div className="setting-field">
+                <label>{t('backend_url')}</label>
+                <input
+                  type="text"
+                  className="setting-input"
+                  value={backendUrl}
+                  onChange={(e) => setBackendUrl(e.target.value)}
+                  placeholder="http://localhost:3000"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="sidebar-spacer" />
 
           <div className="sidebar-note">
@@ -1159,7 +1222,7 @@ function App() {
             </div>
 
             <div className="editor-container">
-              <OnlyOfficeViewer key={editorVersion} ref={viewerRef} config={VIEWER_CONFIG} onEditorReady={handleEditorReady} />
+              <OnlyOfficeViewer key={editorVersion} ref={viewerRef} config={viewerConfig} onEditorReady={handleEditorReady} />
             </div>
           </div>
         ) : null}
