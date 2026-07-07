@@ -354,6 +354,17 @@ export interface DocEditorConfig {
    * Custom translations for i18n
    */
   translations?: Record<string, string>;
+  /**
+   * 转码模式:
+   * - 'wasm': 纯前端模式 (强制在前端使用 x2t.wasm 进行转码)
+   * - 'server': 后端辅助模式 (通过后端 API 转码，需配置 backendUrl)
+   * - 'auto': 自动模式 (优先尝试后端转码，若后端发生故障，自动降级为 WASM 模式)
+   */
+  mode?: 'wasm' | 'server' | 'auto';
+  /**
+   * 后端转码服务的基础 URL，例如 'http://localhost:3000'
+   */
+  backendUrl?: string;
 }
 
 export interface EmbeddedConfig extends DocEditorConfig {

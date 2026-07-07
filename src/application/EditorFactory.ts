@@ -73,7 +73,7 @@ export class EditorFactory {
     });
 
     // 5. 创建服务和适配器
-    const conversionService = new ConversionServiceAdapter();
+    const conversionService = new ConversionServiceAdapter(baseConfig);
     const assetsRegistry = new AssetsRegistryAdapter();
     const x2tService = new X2TExportServiceAdapter();
     const resourceCleaner = new ResourceCleanerAdapter();
