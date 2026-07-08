@@ -1,5 +1,5 @@
 export type EditorInput = File | Blob | ArrayBuffer | string;
-export type ExportFormat = "pdf" | "docx" | "xlsx" | "pptx";
+export type ExportFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx';
 export type DocumentType = 'word' | 'cell' | 'slide' | 'pdf';
 export type Mode = 'view' | 'edit';
 export type ToolbarDocked = 'top' | 'bottom';
@@ -8,332 +8,393 @@ export type Group = string;
 export type LoadingType = 'loading' | 'converting' | 'initing' | 'ready' | 'error';
 
 export interface LoadingStatus {
-    type: LoadingType;
-    message: string;
-    progress?: number;
+  type: LoadingType;
+  message: string;
+  progress?: number;
 }
 
 export interface IEditor {
   open(input: EditorInput): Promise<void>;
-  newFile(format: "docx" | "xlsx" | "pptx"): Promise<void>;
+  newFile(format: 'docx' | 'xlsx' | 'pptx'): Promise<void>;
   save(filename?: string): Promise<{ blob: Blob; filename: string }>;
   export(format: ExportFormat): Promise<Blob>;
   destroy(): void;
 }
 
 export interface Permission {
-    edit?: boolean;
-    download?: boolean;
-    reader?: boolean;
-    review?: boolean;
-    print?: boolean;
-    comment?: boolean;
-    modifyFilter?: boolean;
-    modifyContentControl?: boolean;
-    fillForms?: boolean;
-    copy?: boolean;
-    editCommentAuthorOnly?: boolean;
-    deleteCommentAuthorOnly?: boolean;
-    reviewGroups?: Group[];
-    commentGroups?: {
-        view?: Group[];
-        edit?: Group[];
-        remove?: Group[];
-    };
-    userInfoGroups?: Group[];
-    protect?: boolean;
-    chat?: boolean;
+  edit?: boolean;
+  download?: boolean;
+  reader?: boolean;
+  review?: boolean;
+  print?: boolean;
+  comment?: boolean;
+  modifyFilter?: boolean;
+  modifyContentControl?: boolean;
+  fillForms?: boolean;
+  copy?: boolean;
+  editCommentAuthorOnly?: boolean;
+  deleteCommentAuthorOnly?: boolean;
+  reviewGroups?: Group[];
+  commentGroups?: {
+    view?: Group[];
+    edit?: Group[];
+    remove?: Group[];
+  };
+  userInfoGroups?: Group[];
+  protect?: boolean;
+  chat?: boolean;
 }
 
 export interface DocumentInfo {
-    owner?: string;
-    folder?: string;
-    uploaded?: string;
-    sharingSettings?: {
-        user: string;
-        permissions: string;
-        isLink: boolean;
-    }[];
-    favorite?: boolean;
+  owner?: string;
+  folder?: string;
+  uploaded?: string;
+  sharingSettings?: {
+    user: string;
+    permissions: string;
+    isLink: boolean;
+  }[];
+  favorite?: boolean;
 }
 
 export interface DocumentConfig {
-    title?: string;
-    url?: string;
-    fileType?: string;
-    options?: any;
-    key?: string;
-    vkey?: string;
-    referenceData?: any;
-    info?: DocumentInfo;
-    permissions?: Permission;
+  title?: string;
+  url?: string;
+  fileType?: string;
+  options?: any;
+  key?: string;
+  vkey?: string;
+  referenceData?: any;
+  info?: DocumentInfo;
+  permissions?: Permission;
+  isForm?: boolean;
+  directUrl?: string;
 }
 
 export interface EditorUser {
-    id: string;
-    name: string;
-    group?: string;
-    image?: string;
-    roles?: string[];
+  id: string;
+  name: string;
+  group?: string;
+  image?: string;
+  roles?: string[];
 }
 
 export interface RecentDocument {
-    title: string;
-    url: string;
-    folder: string;
+  title: string;
+  url: string;
+  folder: string;
 }
 
 export interface Template {
-    title: string;
-    image: string;
-    url: string;
+  title: string;
+  image: string;
+  url: string;
 }
 
 export interface CustomizationLayout {
-    toolbar?: boolean | {
-        file?: boolean | {
-            close?: boolean;
-            settings?: boolean;
-            info?: boolean;
-            save?: boolean;
-        };
-        home?: boolean | {
-            mailmerge?: boolean;
-        };
-        insert?: boolean | {
-            file?: boolean;
-            field?: boolean;
-        };
-        layout?: boolean | {
-            pagecolor?: boolean;
-        };
+  toolbar?:
+    | boolean
+    | {
+        file?:
+          | boolean
+          | {
+              close?: boolean;
+              settings?: boolean;
+              info?: boolean;
+              save?: boolean;
+            };
+        home?:
+          | boolean
+          | {
+              mailmerge?: boolean;
+            };
+        insert?:
+          | boolean
+          | {
+              file?: boolean;
+              field?: boolean;
+            };
+        layout?:
+          | boolean
+          | {
+              pagecolor?: boolean;
+            };
         references?: boolean;
-        collaboration?: boolean | {
-            mailmerge?: boolean;
-        };
+        collaboration?:
+          | boolean
+          | {
+              mailmerge?: boolean;
+            };
         draw?: boolean;
         protect?: boolean;
         plugins?: boolean;
-        view?: boolean | {
-            navigation?: boolean;
-        };
+        view?:
+          | boolean
+          | {
+              navigation?: boolean;
+            };
         save?: boolean;
-    };
-    header?: boolean | {
+      };
+  header?:
+    | boolean
+    | {
         users?: boolean;
         save?: boolean;
         editMode?: boolean;
-    };
-    leftMenu?: boolean | {
+      };
+  leftMenu?:
+    | boolean
+    | {
         navigation?: boolean;
         spellcheck?: boolean;
         mode?: boolean;
-    };
-    rightMenu?: boolean | {
+      };
+  rightMenu?:
+    | boolean
+    | {
         mode?: boolean;
-    };
-    statusBar?: boolean | {
+      };
+  statusBar?:
+    | boolean
+    | {
         textLang?: boolean;
         docLang?: boolean;
         actionStatus?: boolean;
-    };
+      };
 }
 
 export interface CustomizationFeatures {
-    spellcheck?: boolean | {
+  spellcheck?:
+    | boolean
+    | {
         mode?: boolean;
         change?: boolean;
-    };
-    roles?: boolean;
-    tabStyle?: 'fill' | 'line' | {
+      };
+  roles?: boolean;
+  tabStyle?:
+    | 'fill'
+    | 'line'
+    | {
         mode: 'fill' | 'line';
         change: boolean;
-    };
-    tabBackground?: 'header' | 'toolbar' | {
+      };
+  tabBackground?:
+    | 'header'
+    | 'toolbar'
+    | {
         mode: 'header' | 'toolbar';
         change: boolean;
-    };
-    featuresTips?: boolean;
+      };
+  featuresTips?: boolean;
 }
 
 export interface CustomizationConfig {
-    logo?: {
-        image?: string;
-        imageDark?: string;
-        imageLight?: string;
-        imageEmbedded?: string;
-        url?: string;
-        visible?: boolean;
-    };
-    customer?: {
-        name?: string;
-        address?: string;
-        mail?: string;
-        www?: string;
-        phone?: string;
-        info?: string;
-        logo?: string;
-        logoDark?: string;
-    };
-    about?: boolean;
-    feedback?: {
-        visible: boolean;
-        url: string;
-    };
-    goback?: {
-        url?: string;
-        text?: string;
-        blank?: boolean;
-        requestClose?: boolean;
-    };
-    close?: {
-        visible: boolean;
-        text: string;
-    };
-    reviewPermissions?: Record<string, string[]>;
-    anonymous?: {
-        request?: boolean;
-        label?: string;
-    };
-    review?: {
-        hideReviewDisplay?: boolean;
-        hoverMode?: boolean;
-        showReviewChanges?: boolean;
-        reviewDisplay?: 'original' | 'markup';
-        trackChanges?: boolean;
-    };
-    layout?: CustomizationLayout;
-    features?: CustomizationFeatures;
-    font?: {
-        name?: string;
-        size?: string;
-    };
-    // chat?: boolean;
-    comments?: boolean;
-    zoom?: number;
-    compactToolbar?: boolean;
-    // leftMenu?: boolean;
-    // rightMenu?: boolean;
-    hideRightMenu?: boolean;
-    toolbar?: boolean;
-    statusBar?: boolean;
-    autosave?: boolean;
-    forcesave?: boolean;
-    commentAuthorOnly?: boolean;
-    // showReviewChanges: duplicate in review
-    help?: boolean;
-    compactHeader?: boolean;
-    toolbarNoTabs?: boolean;
-    toolbarHideFileName?: boolean;
-    // reviewDisplay: duplicate in review
-    // spellcheck?: boolean;
-    compatibleFeatures?: boolean;
-    unit?: string;
-    mentionShare?: boolean;
-    macros?: boolean;
-    plugins?: boolean;
-    macrosMode?: 'warn' | 'enable' | 'disable';
-    // trackChanges: duplicate in review
-    hideRulers?: boolean;
-    hideNotes?: boolean;
-    uiTheme?: OfficeTheme;
-    integrationMode?: string;
-    pointerMode?: 'select' | 'hand';
-    mobile?: {
-        forceView?: boolean;
-        standardView?: boolean;
-        disableForceDesktop?: boolean;
-    };
-    submitForm?: {
-        visible?: boolean;
-        resultMessage?: string;
-    };
-    startFillingForm?: {
-        text?: string;
-    };
-    slidePlayerBackground?: string;
-    wordHeadingsColor?: string;
-    showVerticalScroll?: boolean;
-    showHorizontalScroll?: boolean;
+  logo?: {
+    image?: string;
+    imageDark?: string;
+    imageLight?: string;
+    imageEmbedded?: string;
+    url?: string;
+    visible?: boolean;
+  };
+  customer?: {
+    name?: string;
+    address?: string;
+    mail?: string;
+    www?: string;
+    phone?: string;
+    info?: string;
+    logo?: string;
+    logoDark?: string;
+  };
+  about?: boolean;
+  feedback?: {
+    visible: boolean;
+    url: string;
+  };
+  goback?: {
+    url?: string;
+    text?: string;
+    blank?: boolean;
+    requestClose?: boolean;
+  };
+  close?: {
+    visible: boolean;
+    text: string;
+  };
+  reviewPermissions?: Record<string, string[]>;
+  anonymous?: {
+    request?: boolean;
+    label?: string;
+  };
+  review?: {
+    hideReviewDisplay?: boolean;
+    hoverMode?: boolean;
+    showReviewChanges?: boolean;
+    reviewDisplay?: 'original' | 'markup';
+    trackChanges?: boolean;
+  };
+  layout?: CustomizationLayout;
+  features?: CustomizationFeatures;
+  font?: {
+    name?: string;
+    size?: string;
+  };
+  // chat?: boolean;
+  comments?: boolean;
+  zoom?: number;
+  compactToolbar?: boolean;
+  // leftMenu?: boolean;
+  // rightMenu?: boolean;
+  hideRightMenu?: boolean;
+  toolbar?: boolean;
+  statusBar?: boolean;
+  autosave?: boolean;
+  forcesave?: boolean;
+  commentAuthorOnly?: boolean;
+  // showReviewChanges: duplicate in review
+  help?: boolean;
+  compactHeader?: boolean;
+  toolbarNoTabs?: boolean;
+  toolbarHideFileName?: boolean;
+  // reviewDisplay: duplicate in review
+  // spellcheck?: boolean;
+  compatibleFeatures?: boolean;
+  unit?: string;
+  mentionShare?: boolean;
+  macros?: boolean;
+  plugins?: boolean;
+  macrosMode?: 'warn' | 'enable' | 'disable';
+  // trackChanges: duplicate in review
+  hideRulers?: boolean;
+  hideNotes?: boolean;
+  uiTheme?: OfficeTheme;
+  integrationMode?: string;
+  pointerMode?: 'select' | 'hand';
+  mobile?: {
+    forceView?: boolean;
+    standardView?: boolean;
+    disableForceDesktop?: boolean;
+  };
+  submitForm?: {
+    visible?: boolean;
+    resultMessage?: string;
+  };
+  startFillingForm?: {
+    text?: string;
+  };
+  slidePlayerBackground?: string;
+  wordHeadingsColor?: string;
+  showVerticalScroll?: boolean;
+  showHorizontalScroll?: boolean;
 }
 
 export interface EditorConfig {
-    actionLink?: {
-        action: {
-            type: "bookmark" | "comment";
-            data: string;
-        };
+  actionLink?: {
+    action: {
+      type: 'bookmark' | 'comment';
+      data: string;
     };
-    mode?: Mode;
-    lang?: string;
-    location?: string;
-    canCoAuthoring?: boolean;
-    canBackToFolder?: boolean;
-    createUrl?: string;
-    sharingSettingsUrl?: string;
-    fileChoiceUrl?: string;
-    callbackUrl?: string;
-    mergeFolderUrl?: string;
-    saveAsUrl?: string;
-    licenseUrl?: string;
-    customerId?: string;
-    region?: string;
-    user?: EditorUser;
-    recent?: RecentDocument[];
-    templates?: Template[];
-    customization?: CustomizationConfig;
-    coEditing?: {
-        mode: 'fast' | 'strict';
-        change: boolean;
-    };
-    plugins?: {
-        autostart?: string[];
-        pluginsData?: string[];
-    };
-    wopi?: {
-        FileNameMaxLength?: number;
-    };
+  };
+  mode?: Mode;
+  lang?: string;
+  location?: string;
+  canCoAuthoring?: boolean;
+  canBackToFolder?: boolean;
+  createUrl?: string;
+  sharingSettingsUrl?: string;
+  fileChoiceUrl?: string;
+  callbackUrl?: string;
+  mergeFolderUrl?: string;
+  saveAsUrl?: string;
+  licenseUrl?: string;
+  customerId?: string;
+  region?: string;
+  user?: EditorUser;
+  recent?: RecentDocument[];
+  templates?: Template[];
+  customization?: CustomizationConfig;
+  coEditing?: {
+    mode: 'fast' | 'strict';
+    change: boolean;
+  };
+  plugins?: {
+    autostart?: string[];
+    pluginsData?: string[];
+  };
+  wopi?: {
+    FileNameMaxLength?: number;
+  };
+  canHistoryClose?: boolean;
+  canHistoryRestore?: boolean;
+  canMakeActionLink?: boolean;
+  canRename?: boolean;
+  canRequestClose?: boolean;
+  canRequestCompareFile?: boolean;
+  canRequestCreateNew?: boolean;
+  canRequestEditRights?: boolean;
+  canRequestFillingStatus?: boolean;
+  canRequestInsertImage?: boolean;
+  canRequestMailMergeRecipients?: boolean;
+  canRequestOpen?: boolean;
+  canRequestReferenceData?: boolean;
+  canRequestReferenceSource?: boolean;
+  canRequestRefreshFile?: boolean;
+  canRequestSaveAs?: boolean;
+  canRequestSelectDocument?: boolean;
+  canRequestSelectSpreadsheet?: boolean;
+  canRequestSendNotify?: boolean;
+  canRequestSharingSettings?: boolean;
+  canRequestUsers?: boolean;
+  canSaveDocumentToBinary?: boolean;
+  canSendEmailAddresses?: boolean;
+  canStartFilling?: boolean;
+  canUpdateVersion?: boolean;
+  canUseHistory?: boolean;
+  forceDesktop?: boolean;
 }
 
 export interface EventsConfig {
-    onAppReady?: () => void;
-    onDocumentStateChange?: (event: any) => void;
-    onDocumentReady?: () => void;
-    onLoadingStatus?: (status: LoadingStatus) => void;
-    onRequestEditRights?: () => void;
-    onRequestHistory?: () => void;
-    onRequestHistoryData?: (data: any) => void;
-    onRequestRestore?: (version: any) => void;
-    onRequestHistoryClose?: () => void;
-    onError?: (event: any) => void;
-    onWarning?: (event: any) => void;
-    onInfo?: (event: any) => void;
-    onOutdatedVersion?: () => void;
-    onDownloadAs?: (event: any) => void;
-    onRequestSaveAs?: (event: any) => void;
-    onCollaborativeChanges?: () => void;
-    onRequestRename?: (event: any) => void;
-    onMetaChange?: (event: any) => void;
-    onRequestClose?: () => void;
-    onMakeActionLink?: (event: any) => void;
-    onRequestUsers?: () => void;
-    onRequestSendNotify?: (event: any) => void;
-    onRequestInsertImage?: (event: any) => void;
-    onRequestCompareFile?: () => void;
-    onRequestSharingSettings?: () => void;
-    onRequestCreateNew?: () => void;
-    onRequestReferenceData?: () => void;
-    onRequestOpen?: (event: any) => void;
-    onRequestSelectDocument?: () => void;
-    onRequestSelectSpreadsheet?: () => void;
-    onRequestReferenceSource?: () => void;
-    onSaveDocument?: (event: any) => void;
-    onRequestStartFilling?: () => void;
-    onSubmit?: () => void;
-    onRequestRefreshFile?: () => void;
-    onUserActionRequired?: (event: any) => void;
-    onRequestFillingStatus?: () => void;
-    onStartFilling?: () => void;
+  onAppReady?: () => void;
+  onDocumentStateChange?: (event: any) => void;
+  onDocumentReady?: () => void;
+  onLoadingStatus?: (status: LoadingStatus) => void;
+  onRequestEditRights?: () => void;
+  onRequestHistory?: () => void;
+  onRequestHistoryData?: (data: any) => void;
+  onRequestRestore?: (version: any) => void;
+  onRequestHistoryClose?: () => void;
+  onRequestEmailAddresses?: (event: any) => void;
+  onRequestMailMergeRecipients?: (event: any) => void;
+  onError?: (event: any) => void;
+  onWarning?: (event: any) => void;
+  onInfo?: (event: any) => void;
+  onOutdatedVersion?: () => void;
+  onDownloadAs?: (event: any) => void;
+  onRequestSaveAs?: (event: any) => void;
+  onCollaborativeChanges?: () => void;
+  onRequestRename?: (event: any) => void;
+  onMetaChange?: (event: any) => void;
+  onRequestClose?: () => void;
+  onMakeActionLink?: (event: any) => void;
+  onRequestUsers?: () => void;
+  onRequestSendNotify?: (event: any) => void;
+  onRequestInsertImage?: (event: any) => void;
+  onRequestCompareFile?: () => void;
+  onRequestSharingSettings?: () => void;
+  onRequestCreateNew?: () => void;
+  onRequestReferenceData?: () => void;
+  onRequestOpen?: (event: any) => void;
+  onRequestSelectDocument?: () => void;
+  onRequestSelectSpreadsheet?: () => void;
+  onRequestReferenceSource?: () => void;
+  onSaveDocument?: (event: any) => void;
+  onRequestStartFilling?: () => void;
+  onSubmit?: () => void;
+  onRequestRefreshFile?: () => void;
+  onUserActionRequired?: (event: any) => void;
+  onRequestFillingStatus?: () => void;
+  onStartFilling?: () => void;
 }
 
 export interface DocEditorConfig {
@@ -368,20 +429,20 @@ export interface DocEditorConfig {
 }
 
 export interface EmbeddedConfig extends DocEditorConfig {
-    type: 'embedded';
-    editorConfig: EditorConfig & {
-        autostart?: string;
-        embedded?: {
-            embedUrl?: string;
-            fullscreenUrl?: string;
-            saveUrl?: string;
-            shareUrl?: string;
-            toolbarDocked?: ToolbarDocked;
-        };
+  type: 'embedded';
+  editorConfig: EditorConfig & {
+    autostart?: string;
+    embedded?: {
+      embedUrl?: string;
+      fullscreenUrl?: string;
+      saveUrl?: string;
+      shareUrl?: string;
+      toolbarDocked?: ToolbarDocked;
     };
-    events: EventsConfig & {
-        onBack?: () => void;
-    };
+  };
+  events: EventsConfig & {
+    onBack?: () => void;
+  };
 }
 
 export interface Participant {
@@ -394,12 +455,12 @@ export interface Participant {
 }
 
 export type OfficeTheme =
-  | "theme-light"
-  | "theme-classic-light"
-  | "theme-white"
-  | "theme-dark"
-  | "theme-night"
-  | "theme-contrast-dark";
+  | 'theme-light'
+  | 'theme-classic-light'
+  | 'theme-white'
+  | 'theme-dark'
+  | 'theme-night'
+  | 'theme-contrast-dark';
 
 export const enum AvsFileType {
   AVS_FILE_UNKNOWN = 0x0000,
@@ -530,304 +591,304 @@ export function getFileExtensionByType(type: number | AvsFileType): string {
     case AvsFileType.AVS_FILE_DOCUMENT_DOCX:
     case AvsFileType.AVS_FILE_DOCUMENT_DOCX_FLAT:
     case AvsFileType.AVS_FILE_DOCUMENT_DOCX_PACKAGE:
-      return "docx";
+      return 'docx';
     case AvsFileType.AVS_FILE_DOCUMENT_DOC:
     case AvsFileType.AVS_FILE_DOCUMENT_DOC_FLAT:
-      return "doc";
+      return 'doc';
     case AvsFileType.AVS_FILE_DOCUMENT_ODT:
     case AvsFileType.AVS_FILE_DOCUMENT_ODT_FLAT:
-      return "odt";
+      return 'odt';
     case AvsFileType.AVS_FILE_DOCUMENT_RTF:
-      return "rtf";
+      return 'rtf';
     case AvsFileType.AVS_FILE_DOCUMENT_TXT:
-      return "txt";
+      return 'txt';
     case AvsFileType.AVS_FILE_DOCUMENT_HTML:
     case AvsFileType.AVS_FILE_DOCUMENT_HTML_IN_CONTAINER:
-      return "html";
+      return 'html';
     case AvsFileType.AVS_FILE_DOCUMENT_MHT:
-      return "mht";
+      return 'mht';
     case AvsFileType.AVS_FILE_DOCUMENT_EPUB:
-      return "epub";
+      return 'epub';
     case AvsFileType.AVS_FILE_DOCUMENT_FB2:
-      return "fb2";
+      return 'fb2';
     case AvsFileType.AVS_FILE_DOCUMENT_MOBI:
-      return "mobi";
+      return 'mobi';
     case AvsFileType.AVS_FILE_DOCUMENT_DOCM:
-      return "docm";
+      return 'docm';
     case AvsFileType.AVS_FILE_DOCUMENT_DOTX:
-      return "dotx";
+      return 'dotx';
     case AvsFileType.AVS_FILE_DOCUMENT_DOTM:
-      return "dotm";
+      return 'dotm';
     case AvsFileType.AVS_FILE_DOCUMENT_OTT:
-      return "ott";
+      return 'ott';
     case AvsFileType.AVS_FILE_DOCUMENT_OFORM:
-      return "oform";
+      return 'oform';
     case AvsFileType.AVS_FILE_DOCUMENT_DOCXF:
-      return "docxf";
+      return 'docxf';
     case AvsFileType.AVS_FILE_DOCUMENT_OFORM_PDF:
-      return "pdf";
+      return 'pdf';
 
     case AvsFileType.AVS_FILE_PRESENTATION_PPTX:
     case AvsFileType.AVS_FILE_PRESENTATION_PPTX_PACKAGE:
-      return "pptx";
+      return 'pptx';
     case AvsFileType.AVS_FILE_PRESENTATION_PPT:
-      return "ppt";
+      return 'ppt';
     case AvsFileType.AVS_FILE_PRESENTATION_ODP:
     case AvsFileType.AVS_FILE_PRESENTATION_ODP_FLAT:
-      return "odp";
+      return 'odp';
     case AvsFileType.AVS_FILE_PRESENTATION_PPSX:
-      return "ppsx";
+      return 'ppsx';
     case AvsFileType.AVS_FILE_PRESENTATION_PPTM:
-      return "pptm";
+      return 'pptm';
     case AvsFileType.AVS_FILE_PRESENTATION_PPSM:
-      return "ppsm";
+      return 'ppsm';
     case AvsFileType.AVS_FILE_PRESENTATION_POTX:
-      return "potx";
+      return 'potx';
     case AvsFileType.AVS_FILE_PRESENTATION_POTM:
-      return "potm";
+      return 'potm';
     case AvsFileType.AVS_FILE_PRESENTATION_OTP:
-      return "otp";
+      return 'otp';
     case AvsFileType.AVS_FILE_PRESENTATION_ODG:
-      return "odg";
+      return 'odg';
 
     case AvsFileType.AVS_FILE_SPREADSHEET_XLSX:
     case AvsFileType.AVS_FILE_SPREADSHEET_XLSX_FLAT:
     case AvsFileType.AVS_FILE_SPREADSHEET_XLSX_PACKAGE:
-      return "xlsx";
+      return 'xlsx';
     case AvsFileType.AVS_FILE_SPREADSHEET_XLS:
-      return "xls";
+      return 'xls';
     case AvsFileType.AVS_FILE_SPREADSHEET_ODS:
     case AvsFileType.AVS_FILE_SPREADSHEET_ODS_FLAT:
-      return "ods";
+      return 'ods';
     case AvsFileType.AVS_FILE_SPREADSHEET_CSV:
-      return "csv";
+      return 'csv';
     case AvsFileType.AVS_FILE_SPREADSHEET_XLSM:
-      return "xlsm";
+      return 'xlsm';
     case AvsFileType.AVS_FILE_SPREADSHEET_XLTX:
-      return "xltx";
+      return 'xltx';
     case AvsFileType.AVS_FILE_SPREADSHEET_XLTM:
-      return "xltm";
+      return 'xltm';
     case AvsFileType.AVS_FILE_SPREADSHEET_XLSB:
-      return "xlsb";
+      return 'xlsb';
     case AvsFileType.AVS_FILE_SPREADSHEET_OTS:
-      return "ots";
+      return 'ots';
 
     case AvsFileType.AVS_FILE_CROSSPLATFORM_PDF:
     case AvsFileType.AVS_FILE_CROSSPLATFORM_PDFA:
-      return "pdf";
+      return 'pdf';
     case AvsFileType.AVS_FILE_CROSSPLATFORM_SWF:
-      return "swf";
+      return 'swf';
     case AvsFileType.AVS_FILE_CROSSPLATFORM_DJVU:
-      return "djvu";
+      return 'djvu';
     case AvsFileType.AVS_FILE_CROSSPLATFORM_XPS:
-      return "xps";
+      return 'xps';
     case AvsFileType.AVS_FILE_CROSSPLATFORM_SVG:
-      return "svg";
+      return 'svg';
     case AvsFileType.AVS_FILE_CROSSPLATFORM_HTMLR:
     case AvsFileType.AVS_FILE_CROSSPLATFORM_HTMLR_MENU:
     case AvsFileType.AVS_FILE_CROSSPLATFORM_HTMLR_CANVAS:
-      return "html";
+      return 'html';
 
     case AvsFileType.AVS_FILE_IMAGE_JPG:
-      return "jpg";
+      return 'jpg';
     case AvsFileType.AVS_FILE_IMAGE_TIFF:
-      return "tiff";
+      return 'tiff';
     case AvsFileType.AVS_FILE_IMAGE_TGA:
-      return "tga";
+      return 'tga';
     case AvsFileType.AVS_FILE_IMAGE_GIF:
-      return "gif";
+      return 'gif';
     case AvsFileType.AVS_FILE_IMAGE_PNG:
-      return "png";
+      return 'png';
     case AvsFileType.AVS_FILE_IMAGE_EMF:
-      return "emf";
+      return 'emf';
     case AvsFileType.AVS_FILE_IMAGE_WMF:
-      return "wmf";
+      return 'wmf';
     case AvsFileType.AVS_FILE_IMAGE_BMP:
-      return "bmp";
+      return 'bmp';
     case AvsFileType.AVS_FILE_IMAGE_CR2:
-      return "cr2";
+      return 'cr2';
     case AvsFileType.AVS_FILE_IMAGE_PCX:
-      return "pcx";
+      return 'pcx';
     case AvsFileType.AVS_FILE_IMAGE_RAS:
-      return "ras";
+      return 'ras';
     case AvsFileType.AVS_FILE_IMAGE_PSD:
-      return "psd";
+      return 'psd';
     case AvsFileType.AVS_FILE_IMAGE_ICO:
-      return "ico";
+      return 'ico';
 
     case AvsFileType.AVS_FILE_OTHER_JSON:
-      return "json";
+      return 'json';
 
     case AvsFileType.AVS_FILE_TEAMLAB_DOCY:
-      return "docy";
+      return 'docy';
     case AvsFileType.AVS_FILE_TEAMLAB_XLSY:
-      return "xlsy";
+      return 'xlsy';
     case AvsFileType.AVS_FILE_TEAMLAB_PPTY:
-      return "ppty";
+      return 'ppty';
 
     case AvsFileType.AVS_FILE_CANVAS_WORD:
-      return "docx";
+      return 'docx';
     case AvsFileType.AVS_FILE_CANVAS_SPREADSHEET:
-      return "xlsx";
+      return 'xlsx';
     case AvsFileType.AVS_FILE_CANVAS_PRESENTATION:
-      return "pptx";
+      return 'pptx';
     case AvsFileType.AVS_FILE_CANVAS_PDF:
-      return "pdf";
+      return 'pdf';
 
     case AvsFileType.AVS_FILE_DRAW_VSDX:
-      return "vsdx";
+      return 'vsdx';
     case AvsFileType.AVS_FILE_DRAW_VSSX:
-      return "vssx";
+      return 'vssx';
     case AvsFileType.AVS_FILE_DRAW_VSTX:
-      return "vstx";
+      return 'vstx';
     case AvsFileType.AVS_FILE_DRAW_VSDM:
-      return "vsdm";
+      return 'vsdm';
     case AvsFileType.AVS_FILE_DRAW_VSSM:
-      return "vssm";
+      return 'vssm';
     case AvsFileType.AVS_FILE_DRAW_VSTM:
-      return "vstm";
+      return 'vstm';
 
     default:
-      return "";
+      return '';
   }
 }
 
 export function getAvsFileTypeByExtension(extension: string): AvsFileType {
-  const normalized = extension.toLowerCase().replace(/^\./, "");
+  const normalized = extension.toLowerCase().replace(/^\./, '');
   switch (normalized) {
-    case "docx":
+    case 'docx':
       return AvsFileType.AVS_FILE_DOCUMENT_DOCX;
-    case "doc":
+    case 'doc':
       return AvsFileType.AVS_FILE_DOCUMENT_DOC;
-    case "odt":
+    case 'odt':
       return AvsFileType.AVS_FILE_DOCUMENT_ODT;
-    case "rtf":
+    case 'rtf':
       return AvsFileType.AVS_FILE_DOCUMENT_RTF;
-    case "txt":
+    case 'txt':
       return AvsFileType.AVS_FILE_DOCUMENT_TXT;
-    case "html":
+    case 'html':
       return AvsFileType.AVS_FILE_DOCUMENT_HTML;
-    case "mht":
+    case 'mht':
       return AvsFileType.AVS_FILE_DOCUMENT_MHT;
-    case "epub":
+    case 'epub':
       return AvsFileType.AVS_FILE_DOCUMENT_EPUB;
-    case "fb2":
+    case 'fb2':
       return AvsFileType.AVS_FILE_DOCUMENT_FB2;
-    case "mobi":
+    case 'mobi':
       return AvsFileType.AVS_FILE_DOCUMENT_MOBI;
-    case "docm":
+    case 'docm':
       return AvsFileType.AVS_FILE_DOCUMENT_DOCM;
-    case "dotx":
+    case 'dotx':
       return AvsFileType.AVS_FILE_DOCUMENT_DOTX;
-    case "dotm":
+    case 'dotm':
       return AvsFileType.AVS_FILE_DOCUMENT_DOTM;
-    case "ott":
+    case 'ott':
       return AvsFileType.AVS_FILE_DOCUMENT_OTT;
-    case "oform":
+    case 'oform':
       return AvsFileType.AVS_FILE_DOCUMENT_OFORM;
-    case "docxf":
+    case 'docxf':
       return AvsFileType.AVS_FILE_DOCUMENT_DOCXF;
 
-    case "pptx":
+    case 'pptx':
       return AvsFileType.AVS_FILE_PRESENTATION_PPTX;
-    case "ppt":
+    case 'ppt':
       return AvsFileType.AVS_FILE_PRESENTATION_PPT;
-    case "odp":
+    case 'odp':
       return AvsFileType.AVS_FILE_PRESENTATION_ODP;
-    case "ppsx":
+    case 'ppsx':
       return AvsFileType.AVS_FILE_PRESENTATION_PPSX;
-    case "pptm":
+    case 'pptm':
       return AvsFileType.AVS_FILE_PRESENTATION_PPTM;
-    case "ppsm":
+    case 'ppsm':
       return AvsFileType.AVS_FILE_PRESENTATION_PPSM;
-    case "potx":
+    case 'potx':
       return AvsFileType.AVS_FILE_PRESENTATION_POTX;
-    case "potm":
+    case 'potm':
       return AvsFileType.AVS_FILE_PRESENTATION_POTM;
-    case "otp":
+    case 'otp':
       return AvsFileType.AVS_FILE_PRESENTATION_OTP;
-    case "odg":
+    case 'odg':
       return AvsFileType.AVS_FILE_PRESENTATION_ODG;
 
-    case "xlsx":
+    case 'xlsx':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLSX;
-    case "xls":
+    case 'xls':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLS;
-    case "ods":
+    case 'ods':
       return AvsFileType.AVS_FILE_SPREADSHEET_ODS;
-    case "csv":
+    case 'csv':
       return AvsFileType.AVS_FILE_SPREADSHEET_CSV;
-    case "xlsm":
+    case 'xlsm':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLSM;
-    case "xltx":
+    case 'xltx':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLTX;
-    case "xltm":
+    case 'xltm':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLTM;
-    case "xlsb":
+    case 'xlsb':
       return AvsFileType.AVS_FILE_SPREADSHEET_XLSB;
-    case "ots":
+    case 'ots':
       return AvsFileType.AVS_FILE_SPREADSHEET_OTS;
 
-    case "pdf":
+    case 'pdf':
       return AvsFileType.AVS_FILE_CROSSPLATFORM_PDF;
-    case "swf":
+    case 'swf':
       return AvsFileType.AVS_FILE_CROSSPLATFORM_SWF;
-    case "djvu":
+    case 'djvu':
       return AvsFileType.AVS_FILE_CROSSPLATFORM_DJVU;
-    case "xps":
+    case 'xps':
       return AvsFileType.AVS_FILE_CROSSPLATFORM_XPS;
-    case "svg":
+    case 'svg':
       return AvsFileType.AVS_FILE_CROSSPLATFORM_SVG;
 
-    case "jpg":
-    case "jpeg":
+    case 'jpg':
+    case 'jpeg':
       return AvsFileType.AVS_FILE_IMAGE_JPG;
-    case "tiff":
+    case 'tiff':
       return AvsFileType.AVS_FILE_IMAGE_TIFF;
-    case "tga":
+    case 'tga':
       return AvsFileType.AVS_FILE_IMAGE_TGA;
-    case "gif":
+    case 'gif':
       return AvsFileType.AVS_FILE_IMAGE_GIF;
-    case "png":
+    case 'png':
       return AvsFileType.AVS_FILE_IMAGE_PNG;
-    case "emf":
+    case 'emf':
       return AvsFileType.AVS_FILE_IMAGE_EMF;
-    case "wmf":
+    case 'wmf':
       return AvsFileType.AVS_FILE_IMAGE_WMF;
-    case "bmp":
+    case 'bmp':
       return AvsFileType.AVS_FILE_IMAGE_BMP;
-    case "cr2":
+    case 'cr2':
       return AvsFileType.AVS_FILE_IMAGE_CR2;
-    case "pcx":
+    case 'pcx':
       return AvsFileType.AVS_FILE_IMAGE_PCX;
-    case "ras":
+    case 'ras':
       return AvsFileType.AVS_FILE_IMAGE_RAS;
-    case "psd":
+    case 'psd':
       return AvsFileType.AVS_FILE_IMAGE_PSD;
-    case "ico":
+    case 'ico':
       return AvsFileType.AVS_FILE_IMAGE_ICO;
 
-    case "json":
+    case 'json':
       return AvsFileType.AVS_FILE_OTHER_JSON;
 
-    case "docy":
+    case 'docy':
       return AvsFileType.AVS_FILE_TEAMLAB_DOCY;
-    case "xlsy":
+    case 'xlsy':
       return AvsFileType.AVS_FILE_TEAMLAB_XLSY;
-    case "ppty":
+    case 'ppty':
       return AvsFileType.AVS_FILE_TEAMLAB_PPTY;
 
-    case "vsdx":
+    case 'vsdx':
       return AvsFileType.AVS_FILE_DRAW_VSDX;
-    case "vssx":
+    case 'vssx':
       return AvsFileType.AVS_FILE_DRAW_VSSX;
-    case "vstx":
+    case 'vstx':
       return AvsFileType.AVS_FILE_DRAW_VSTX;
-    case "vsdm":
+    case 'vsdm':
       return AvsFileType.AVS_FILE_DRAW_VSDM;
-    case "vssm":
+    case 'vssm':
       return AvsFileType.AVS_FILE_DRAW_VSSM;
-    case "vstm":
+    case 'vstm':
       return AvsFileType.AVS_FILE_DRAW_VSTM;
 
     default:
@@ -838,7 +899,10 @@ export function getAvsFileTypeByExtension(extension: string): AvsFileType {
 declare global {
   interface Window {
     DocsAPI?: {
-      DocEditor: new (placeholderId: string, config: DocEditorConfig) => {
+      DocEditor: new (
+        placeholderId: string,
+        config: DocEditorConfig
+      ) => {
         destroyEditor?: () => void;
       };
     };

@@ -196,9 +196,11 @@ export function buildEditorConfig(
   const documentConfig = {
     ...(restBaseConfig.document ?? {}),
     url: resolved.url,
+    directUrl: resolved.url,
     fileType: resolved.fileType,
     title: resolved.title,
     key: docKey,
+    isForm: restBaseConfig.document?.isForm ?? (resolved.fileType === "pdf" ? false : undefined),
   };
 
   const mergedEvents = mergeEvents(restBaseConfig.events, internalEvents);

@@ -379,13 +379,16 @@ export class FakeSocket {
   private emitDocumentOpen() {
     if (!this.openCmd?.url) return;
     const format = this.openCmd?.format || "docx";
-    const urls: Record<string, string> = {
-      "Editor.bin": this.openCmd.url,
-    };
-    urls[`origin.${format}`] = this.openCmd.url;
+    const assets = this.getAssets();
+    const originUrl = assets?.originUrl || this.openCmd.url;
+
+    const urls: Record<string, string> = {};
+    if (format !== "pdf") {
+      urls["Editor.bin"] = this.openCmd.url;
+    }
+    urls[`origin.${format}`] = originUrl;
 
     // 修复：使用 ImagePathNormalizer 统一路径格式，避免一张图片生成多个键
-    const assets = this.getAssets();
     if (assets?.images) {
       for (const [name, url] of Object.entries(assets.images)) {
         // 统一标准化为 media/xxx.png 格式

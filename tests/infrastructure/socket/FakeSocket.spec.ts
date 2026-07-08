@@ -55,8 +55,9 @@ describe('FakeSocket', () => {
 
     const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
       socket.on('message', (message) => {
-        if ((message as { type?: unknown }).type === 'imgurls') {
-          resolve(message as Record<string, unknown>);
+        const msg = message as { type?: string; data?: Record<string, unknown> };
+        if (msg.type === 'documentOpen' && msg.data?.type === 'imgurls') {
+          resolve(msg.data);
         }
       });
     });
@@ -106,8 +107,9 @@ describe('FakeSocket', () => {
     const socket = new FakeSocket();
     const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
       socket.on('message', (message) => {
-        if ((message as { type?: unknown }).type === 'imgurls') {
-          resolve(message as Record<string, unknown>);
+        const msg = message as { type?: string; data?: Record<string, unknown> };
+        if (msg.type === 'documentOpen' && msg.data?.type === 'imgurls') {
+          resolve(msg.data);
         }
       });
     });

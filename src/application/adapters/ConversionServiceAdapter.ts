@@ -40,6 +40,15 @@ export class ConversionServiceAdapter implements ConversionService {
    * 使用 X2T 转换文档（通过路由切换 WASM 或 Go 后端辅助转码）
    */
   async convertWithX2T(prepared: UseCasePreparedInput): Promise<ConvertedDocument> {
+    const file = prepared.file;
+    const fileName = file instanceof File ? file.name : prepared.title || '';
+    const isPdf = fileName.toLowerCase().endsWith('.pdf') || (file instanceof Blob && file.type === 'application/pdf');
+
+    if (isPdf) {
+      // PDF 不需要经过 x2t 转换，前端直接以 WASM 模式在本地处理（使用原生 Blob URL），无需向后端发起转换请求
+      return this.convertWithWasm(prepared);
+    }
+
     const mode = this.config?.mode || 'wasm';
 
     if (mode === 'server') {
