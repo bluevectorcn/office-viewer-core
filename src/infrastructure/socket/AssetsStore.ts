@@ -9,6 +9,11 @@ export type DocumentAssets = {
   mediaData?: Record<string, Uint8Array>;
   fileType?: string;
   title?: string;
+  /**
+   * 文档类型（word/cell/slide/pdf），用于在另存为 PDF/导出时
+   * 确定 Editor.bin 对应的 Canvas 源格式码 (m_nFormatFrom)。
+   */
+  documentType?: "word" | "cell" | "slide" | "pdf";
   downloads?: string[];
 };
 

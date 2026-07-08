@@ -1,7 +1,7 @@
 import { emitServerMessage } from "../../infrastructure/socket/FakeSocket";
 import { createId } from "../../shared/utils/LifecycleHelpers";
 import { type ExportFormat, getFileExtensionByType } from "../../shared/types/EditorTypes";
-import { exportWithX2T, initX2TModule } from "../../infrastructure/conversion/X2TService";
+import { exportWithX2T, exportPdfViaBackend, initX2TModule } from "../../infrastructure/conversion/X2TService";
 import { getDocumentAssets, registerDownloadUrl } from "../../infrastructure/socket/AssetsStore";
 import { ChunkedUploader } from "@/infrastructure/network/ChunkedUploader";
 import { Logger } from "@/shared/logging/Logger";
@@ -293,6 +293,22 @@ function resolveParentDocKey(targetWindow: Window) {
   }
 }
 
+/**
+ * 从父窗口的 DocEditorConfig 读取后端转码配置（mode + backendUrl）。
+ * "另存为 PDF" 的请求由 OnlyOffice iframe 发出，被 NetworkPatch 拦截后
+ * 进入本处理器；此处需要从挂载在父窗口的配置中取出后端地址。
+ */
+function resolveBackendConfig(targetWindow: Window): { mode?: string; backendUrl?: string } {
+  try {
+    const parentConfig = (targetWindow.parent as Window & {
+      DocEditorConfig?: { mode?: string; backendUrl?: string };
+    }).DocEditorConfig;
+    return { mode: parentConfig?.mode, backendUrl: parentConfig?.backendUrl };
+  } catch {
+    return {};
+  }
+}
+
 function completeSave(
   targetWindow: Window,
   docId: string,
@@ -321,6 +337,68 @@ function completeSave(
     dataType: typeof response.data,
   });
   return response;
+}
+
+async function fetchEditorBin(editorUrl: string): Promise<Uint8Array> {
+  const response = await fetch(editorUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Editor.bin: ${response.status}`);
+  }
+  const buffer = await response.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
+/**
+ * 确保所有媒体资源（图片等）的字节数据可用，用于另存为时喂给 x2t。
+ *
+ * assets.images 包含文档引用的全部图片 key → URL 映射（既包含打开时
+ * 后端返回的远程 URL，也包含编辑过程中客户端新增的 blob URL）。
+ * assets.mediaData 只在客户端有字节数据时才填充——后端模式下打开时
+ * 原有图片的 mediaData 为空（仅存远程 URL），编辑新增的图片才有字节。
+ *
+ * 因此不能仅凭 mediaData 是否为空判断：必须以 images 的 key 为准，
+ * 逐个检查 mediaData 是否已有字节，缺失的才从 URL 拉取。否则会出现
+ * "编辑过的文档另存为时丢失原有图片"的问题。
+ */
+async function ensureMediaData(
+  assets: ReturnType<typeof getDocumentAssets>
+): Promise<Record<string, Uint8Array> | undefined> {
+  if (!assets) return undefined;
+  if (!assets.images || Object.keys(assets.images).length === 0) {
+    // 没有图片引用；若 mediaData 有数据（理论上不该有）也直接返回
+    return assets.mediaData && Object.keys(assets.mediaData).length > 0
+      ? assets.mediaData
+      : undefined;
+  }
+
+  if (!assets.mediaData) {
+    assets.mediaData = {};
+  }
+  const mediaData = assets.mediaData;
+
+  // 找出缺失字节数据的图片，从对应 URL 拉取
+  const missing = Object.entries(assets.images).filter(
+    ([key]) => !mediaData[key]
+  );
+  if (missing.length > 0) {
+    await Promise.all(
+      missing.map(async ([key, url]) => {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            console.warn(`Failed to fetch media "${key}": ${response.status}`);
+            return;
+          }
+          const buffer = await response.arrayBuffer();
+          mediaData[key] = new Uint8Array(buffer);
+        } catch (error) {
+          console.warn(`Failed to fetch media "${key}"`, error);
+        }
+      })
+    );
+  }
+
+  return Object.keys(mediaData).length > 0 ? mediaData : undefined;
 }
 
 async function finalizeSave(
@@ -362,19 +440,48 @@ async function finalizeSave(
       return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave zip passthrough");
     }
 
+    // PDF 专用路径：wasm 版 x2t 裁剪了 doctrenderer（依赖 V8），无法在浏览器内
+    // 把 Editor.bin 渲染成 PDF。必须依赖 Go 后端的原生 x2t（带完整 doctrenderer +
+    // PdfFile 库）来完成 Editor.bin → PDF 转换。
+    if (exportFormat === "pdf") {
+      const { mode, backendUrl } = resolveBackendConfig(targetWindow);
+      if (!backendUrl) {
+        throw new Error(
+          "导出 PDF 需要后端转码服务支持（wasm 版 x2t 不含 PDF 渲染能力）。请在编辑器配置中设置 backendUrl 并将 mode 设为 'server' 或 'auto'。"
+        );
+      }
+      if (mode === "wasm") {
+        throw new Error(
+          "当前转码模式为 'wasm'，无法导出 PDF。请将 mode 改为 'server' 或 'auto' 并配置 backendUrl。"
+        );
+      }
+      const documentType = assets.documentType ?? "word";
+      const editorBin = await fetchEditorBin(assets.editorUrl);
+      const blob = await exportPdfViaBackend(editorBin, documentType, backendUrl, assets.title);
+      return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave pdf via backend");
+    }
+
     await initX2TModule();
 
     const ownedBytes = toOwnedUint8Array(bytes);
     const sourceFile = new File([ownedBytes], "Editor.bin", {
       type: "application/octet-stream",
     });
+    // 后端模式下 mediaData 为空（图片是远程 URL），另存为时需拉取字节喂给 x2t
+    const mediaData = await ensureMediaData(assets);
     const blob = await exportWithX2T(sourceFile, exportFormat, {
       sourceName: "Editor.bin",
-      media: assets.mediaData,
+      media: mediaData,
+      documentType: assets.documentType,
     });
     return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave success");
   } catch (error) {
-    console.error("x2t conversion failed, falling back to raw bytes", error);
+    console.error("finalizeSave failed", error);
+    // PDF 导出失败时不能回退到原始字节（那是 pdf.bin 渲染数据或 Editor.bin，不是合法 PDF，
+    // 会产出无法打开的文件）。向上抛错，让编辑器向用户展示失败信息。
+    if (exportFormat === "pdf") {
+      throw error;
+    }
     const ownedBytes = toOwnedUint8Array(bytes);
     const blob = new Blob([ownedBytes], { type: "application/octet-stream" });
     return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave fallback");

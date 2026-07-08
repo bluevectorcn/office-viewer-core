@@ -16,6 +16,7 @@ export class AssetsRegistryAdapter implements AssetsRegistry {
       mediaData?: Record<string, Uint8Array>;
       fileType: string;
       title: string;
+      documentType: "word" | "cell" | "slide" | "pdf";
     }
   ): void {
     legacyRegisterAssets(docId, assets);

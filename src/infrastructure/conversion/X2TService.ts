@@ -1,5 +1,5 @@
-import type { ExportFormat } from "../../shared/types/EditorTypes";
-import { AvsFileType } from "../../shared/types/EditorTypes";
+import type { ExportFormat, DocumentType } from "../../shared/types/EditorTypes";
+import { AvsFileType, getAvsFileTypeByExtension } from "../../shared/types/EditorTypes";
 import { resolveAssetPath } from "../socket/AssetsPrefix";
 
 export interface X2TModule {
@@ -236,6 +236,49 @@ type ParamsXmlOptions = {
   formatTo: AvsFileType;
 };
 
+/**
+ * 根据文档类型推导 Editor.bin 对应的 Canvas 源格式码 (m_nFormatFrom)。
+ *
+ * Editor.bin 是 OnlyOffice 编辑器的内部 Canvas 格式，按文档类别分为：
+ * - word  → AVS_FILE_CANVAS_WORD        (0x2001)
+ * - cell  → AVS_FILE_CANVAS_SPREADSHEET (0x2002)
+ * - slide → AVS_FILE_CANVAS_PRESENTATION(0x2003)
+ * - pdf   → AVS_FILE_CANVAS_PDF         (0x2004)
+ *
+ * x2t 无法靠 ".bin" 扩展名识别具体类别，必须显式告知，否则转换会失败或产出损坏文件。
+ */
+function resolveCanvasFormatFrom(documentType: DocumentType): AvsFileType {
+  switch (documentType) {
+    case "cell":
+      return AvsFileType.AVS_FILE_CANVAS_SPREADSHEET;
+    case "slide":
+      return AvsFileType.AVS_FILE_CANVAS_PRESENTATION;
+    case "pdf":
+      return AvsFileType.AVS_FILE_CANVAS_PDF;
+    case "word":
+    default:
+      return AvsFileType.AVS_FILE_CANVAS_WORD;
+  }
+}
+
+/**
+ * 根据目标导出格式推导 x2t 的目标格式码 (m_nFormatTo)。
+ */
+function resolveExportFormatTo(format: ExportFormat): AvsFileType {
+  switch (format) {
+    case "pdf":
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_PDF;
+    case "docx":
+      return AvsFileType.AVS_FILE_DOCUMENT_DOCX;
+    case "xlsx":
+      return AvsFileType.AVS_FILE_SPREADSHEET_XLSX;
+    case "pptx":
+      return AvsFileType.AVS_FILE_PRESENTATION_PPTX;
+    default:
+      return AvsFileType.AVS_FILE_CROSSPLATFORM_PDF;
+  }
+}
+
 function buildParamsXml(fileFrom: string, fileTo: string, options?: ParamsXmlOptions) {
   const formatFrom = options?.formatFrom ? `<m_nFormatFrom>${options?.formatFrom}</m_nFormatFrom>` : "";
   const formatTo = options?.formatTo ? `<m_nFormatTo>${options?.formatTo}</m_nFormatTo>` : "";
@@ -430,7 +473,15 @@ export async function convertToEditorBin(input: File, title: string) {
 export async function exportWithX2T(
   source: Blob,
   format: ExportFormat,
-  options?: { sourceName?: string; media?: Record<string, Uint8Array> }
+  options?: {
+    sourceName?: string;
+    media?: Record<string, Uint8Array>;
+    /**
+     * 文档类型（word/cell/slide/pdf）。当源是 Editor.bin 时必需，
+     * 用于推导 Canvas 源格式码 (m_nFormatFrom)，否则 x2t 无法识别 .bin。
+     */
+    documentType?: DocumentType;
+  }
 ) {
   const resolvedName = resolveSourceName(source, options?.sourceName);
   if (
@@ -457,19 +508,49 @@ export async function exportWithX2T(
   FS.writeFile(sourcePath, bytes);
   writeMediaFiles(FS, options?.media);
 
+  // 推导目标格式码（PDF=0x0201, docx=0x0041, xlsx=0x0101, pptx=0x0081）
+  const formatTo = resolveExportFormatTo(format);
+
+  // 推导源格式码 (m_nFormatFrom)：
+  // - 源是 Editor.bin（编辑器内部 Canvas 二进制）时，必须按 documentType 取对应 Canvas 码，
+  //   因为 x2t 无法靠 ".bin" 扩展名识别它是 word/cell/slide/pdf 的哪一种。
+  // - 源是常规 OOXML/ODF 等文件时，按扩展名查表即可。
+  const isEditorBin = resolvedName.ext === "bin";
+  let formatFrom: AvsFileType;
+  if (isEditorBin) {
+    if (!options?.documentType) {
+      throw new Error(
+        "exportWithX2T: documentType is required when converting Editor.bin (e.g. to PDF)"
+      );
+    }
+    formatFrom = resolveCanvasFormatFrom(options.documentType);
+  } else {
+    const fromExt = getAvsFileTypeByExtension(resolvedName.ext);
+    if (fromExt === AvsFileType.AVS_FILE_UNKNOWN) {
+      throw new Error(`exportWithX2T: cannot resolve source format for ".${resolvedName.ext}"`);
+    }
+    formatFrom = fromExt;
+  }
+
   // Mirror office-website's two-step handling for legacy .doc inputs.
   if (resolvedName.ext === "doc") {
-    const docToDocxParams = buildParamsXml(sourcePath, DOC_VIA_PATH);
+    const docToDocxParams = buildParamsXml(sourcePath, DOC_VIA_PATH, {
+      formatFrom,
+      formatTo: AvsFileType.AVS_FILE_DOCUMENT_DOCX,
+    });
     FS.writeFile(PARAMS_PATH, docToDocxParams);
     runX2T(runtime, PARAMS_PATH);
 
     if (format !== "docx") {
-      const docxToOutputParams = buildParamsXml(DOC_VIA_PATH, outputPath);
+      const docxToOutputParams = buildParamsXml(DOC_VIA_PATH, outputPath, {
+        formatFrom: AvsFileType.AVS_FILE_DOCUMENT_DOCX,
+        formatTo,
+      });
       FS.writeFile(PARAMS_PATH, docxToOutputParams);
       runX2T(runtime, PARAMS_PATH);
     }
   } else {
-    const paramsXml = buildParamsXml(sourcePath, outputPath);
+    const paramsXml = buildParamsXml(sourcePath, outputPath, { formatFrom, formatTo });
     FS.writeFile(PARAMS_PATH, paramsXml);
     runX2T(runtime, PARAMS_PATH);
   }
@@ -479,4 +560,52 @@ export async function exportWithX2T(
   const ownedOutput = new Uint8Array(output);
   const mime = mimeByFormat[format] ?? defaultDocxMime;
   return new Blob([ownedOutput], { type: mime });
+}
+
+/**
+ * 通过 Go 后端（原生 x2t + doctrenderer）把文档导出为 PDF。
+ *
+ * 背景：wasm 版 x2t 裁剪了 doctrenderer（依赖 V8），无法在浏览器内把
+ * Editor.bin / Office 文档渲染成 PDF 页面。后端的原生 x2t 带完整的
+ * doctrenderer + PdfFile 库，能正确生成 PDF。
+ *
+ * @param source - 源文件字节（Editor.bin 或原始 docx/xlsx/pptx）
+ * @param documentType - 文档类型（word/cell/slide/pdf），Editor.bin 时必需
+ * @param backendUrl - 后端服务基础 URL
+ * @param fileName - 原始文件名（用于后端推断源格式）
+ */
+export async function exportPdfViaBackend(
+  source: Uint8Array,
+  documentType: DocumentType,
+  backendUrl: string,
+  fileName?: string
+): Promise<Blob> {
+  const formData = new FormData();
+  const blob = new Blob([source.slice()], { type: "application/octet-stream" });
+  formData.append("file", blob, "Editor.bin");
+  formData.append("documentType", documentType);
+  if (fileName) {
+    formData.append("fileName", fileName);
+  }
+
+  const response = await fetch(`${backendUrl}/api/export-pdf`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Backend PDF export failed: ${response.status} ${response.statusText} (${text})`);
+  }
+
+  const pdfBlob = await response.blob();
+  // 校验是否是合法 PDF
+  const buffer = await pdfBlob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  if (bytes.byteLength < 5 || bytes[0] !== 0x25 || bytes[1] !== 0x50) {
+    throw new Error(
+      `Backend PDF export returned invalid PDF (size=${bytes.byteLength}, header=${Array.from(bytes.slice(0, 4)).join(",")})`
+    );
+  }
+  return new Blob([bytes], { type: "application/pdf" });
 }

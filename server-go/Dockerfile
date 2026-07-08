@@ -48,6 +48,13 @@ ENV X2T_PATH=/app/bin/x2t
 ENV TEMP_DIR=/app/temp
 ENV PORT=3000
 
+# 生成 AllFonts.js 和 font_selection.bin
+RUN /app/bin/allfontsgen \
+    --use-system=false \
+    --input="/app/assets/fonts" \
+    --allfonts="/app/bin/AllFonts.js" \
+    --selection="/app/bin/font_selection.bin"
+
 # 暴露端口
 EXPOSE 3000
 

@@ -19,9 +19,9 @@ import (
 // 并发队列配置
 var (
 	sem                chan struct{}
-	maxConcurrentTasks = 4              // 最大并发转码任务数，保护 CPU
-	x2tPath            = "./bin/x2t"    // x2t 可执行文件路径
-	tempDir            = "./temp"       // 转换临时文件目录
+	maxConcurrentTasks = 4                // 最大并发转码任务数，保护 CPU
+	x2tPath            = "./bin/x2t"      // x2t 可执行文件路径
+	tempDir            = "./temp"         // 转换临时文件目录
 	cleanupThreshold   = 30 * time.Minute // 转换文件保留时间，到期自动清理
 )
 
@@ -70,6 +70,9 @@ func main() {
 
 	// API 接口：文件转码
 	r.POST("/api/convert", handleConvert)
+
+	// API 接口：导出 PDF（原生 x2t + doctrenderer，支持 Editor.bin/原始文档 → PDF）
+	r.POST("/api/export-pdf", handleExportPdf)
 
 	// 启动定期清理定时器
 	go startCleanupTimer(10 * time.Minute)
@@ -239,7 +242,7 @@ func handleConvert(c *gin.Context) {
 	// 7. 扫描生成的 media 文件夹下的静态多媒体图片并返回 URL
 	images := make(map[string]string)
 	mediaDir := filepath.Join(workDir, "media")
-	
+
 	// 判断静态路由协议与域名
 	scheme := "http"
 	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
@@ -431,4 +434,171 @@ func getAvsFormatTo(ext string) string {
 	}
 }
 
+// getAvsCanvasFormat maps documentType (word/cell/slide/pdf) to Editor.bin Canvas format code.
+// Editor.bin 是 OnlyOffice 编辑器内部 Canvas 格式，按文档类别区分：
+//
+//	word → 0x2001 (AVS_FILE_CANVAS_WORD)
+//	cell → 0x2002 (AVS_FILE_CANVAS_SPREADSHEET)
+//	slide → 0x2003 (AVS_FILE_CANVAS_PRESENTATION)
+//	pdf → 0x2004 (AVS_FILE_CANVAS_PDF)
+func getAvsCanvasFormat(documentType string) string {
+	switch strings.ToLower(documentType) {
+	case "cell":
+		return "0x2002"
+	case "slide":
+		return "0x2003"
+	case "pdf":
+		return "0x2004"
+	case "word":
+		fallthrough
+	default:
+		return "0x2001"
+	}
+}
 
+// handleExportPdf 导出 PDF 控制器
+// 接收 multipart 上传的 file（Editor.bin 或原始 Office 文档）+ documentType，
+// 调用原生 x2t（带 doctrenderer）转换为 PDF，直接返回 PDF 字节流。
+//
+// 表单字段：
+//
+//	file          - 上传的文件（Editor.bin 或 docx/xlsx/pptx 等）
+//	documentType  - word/cell/slide/pdf（当 file 是 Editor.bin 时必需）
+//	fileName      - 原始文件名（可选，用于推断源格式）
+func handleExportPdf(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing file in form-data"})
+		return
+	}
+
+	documentType := strings.ToLower(c.PostForm("documentType"))
+	fileName := c.PostForm("fileName")
+	if fileName == "" {
+		fileName = file.Filename
+	}
+
+	// 分配任务 ID 与工作目录
+	taskId := uuid.New().String()
+	workDir := filepath.Join(tempDir, taskId)
+	mu.Lock()
+	err = os.MkdirAll(workDir, 0755)
+	mu.Unlock()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task workspace"})
+		return
+	}
+
+	// 保存上传文件
+	uploadPath := filepath.Join(workDir, "input.bin")
+	if err := c.SaveUploadedFile(file, uploadPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+		return
+	}
+
+	// 判断源格式码：
+	//   - 文件名是 *.bin（Editor.bin）→ 用 documentType 推导 Canvas 码
+	//   - 否则按扩展名推导
+	var formatFrom string
+	uploadExt := strings.ToLower(filepath.Ext(fileName))
+	isEditorBin := uploadExt == ".bin" || uploadExt == ""
+	if isEditorBin {
+		if documentType == "" {
+			documentType = "word"
+		}
+		formatFrom = getAvsCanvasFormat(documentType)
+	} else {
+		formatFrom = getAvsFormatFrom(uploadExt)
+		if formatFrom == "0x0000" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported source extension: %s", uploadExt)})
+			return
+		}
+	}
+
+	// 目标固定为 PDF (0x0201)
+	formatTo := "0x0201"
+
+	// 字体与主题目录
+	fontDir := filepath.Join(".", "assets", "fonts") + string(filepath.Separator)
+	themeDir := filepath.Join(".", "sdkjs", "slide", "themes")
+	absFontDir, err := filepath.Abs(fontDir)
+	if err == nil {
+		absFontDir = absFontDir + string(filepath.Separator)
+	} else {
+		absFontDir = fontDir
+	}
+	absThemeDir, err := filepath.Abs(themeDir)
+	if err != nil {
+		absThemeDir = themeDir
+	}
+
+	outputPath := filepath.Join(workDir, "export.pdf")
+	paramsPath := filepath.Join(workDir, "params.xml")
+	paramsContent := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
+<TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <m_sFontDir>%s</m_sFontDir>
+  <m_sThemeDir>%s</m_sThemeDir>
+  <m_sFileFrom>%s</m_sFileFrom>
+  <m_sFileTo>%s</m_sFileTo>
+  <m_nFormatFrom>%s</m_nFormatFrom>
+  <m_nFormatTo>%s</m_nFormatTo>
+  <m_bIsNoBase64>true</m_bIsNoBase64>
+</TaskQueueDataConvert>`, absFontDir, absThemeDir, uploadPath, outputPath, formatFrom, formatTo)
+
+	if err := os.WriteFile(paramsPath, []byte(paramsContent), 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate parameters file"})
+		return
+	}
+
+	// 并发控制
+	select {
+	case sem <- struct{}{}:
+		defer func() { <-sem }()
+	case <-time.After(60 * time.Second):
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Server is busy. Queue wait timed out."})
+		return
+	}
+
+	// 调用原生 x2t
+	log.Printf("[Task %s] Exporting PDF: %s (documentType=%s, formatFrom=%s)\n", taskId, fileName, documentType, formatFrom)
+	cmd := exec.Command(x2tPath, paramsPath)
+	outputBytes, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[Task %s] x2t error: %v, output: %s\n", taskId, err, string(outputBytes))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   fmt.Sprintf("x2t conversion failed: %v", err),
+			"details": string(outputBytes),
+		})
+		return
+	}
+
+	// 读取生成的 PDF
+	pdfBytes, err := os.ReadFile(outputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "x2t produced no PDF output", "details": string(outputBytes)})
+		return
+	}
+
+	// 校验是否是合法 PDF
+	if len(pdfBytes) < 5 || pdfBytes[0] != 0x25 || pdfBytes[1] != 0x50 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "x2t output is not a valid PDF",
+			"details": fmt.Sprintf("header=% x, size=%d", pdfBytes[:min(8, len(pdfBytes))], len(pdfBytes)),
+		})
+		return
+	}
+
+	log.Printf("[Task %s] PDF export completed (size=%d).\n", taskId, len(pdfBytes))
+
+	// 返回 PDF 文件
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.pdf\"", strings.TrimSuffix(fileName, filepath.Ext(fileName))))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

@@ -1,8 +1,28 @@
-import type { ExportFormat } from '../../shared/types/EditorTypes';
+import type { ExportFormat, DocumentType } from '../../shared/types/EditorTypes';
 import type { Logger } from '../../shared/logging/Logger';
 import type { DocumentSession } from './OpenDocumentUseCase';
 import type { DownloadRequester } from './SaveDocumentUseCase';
 import { EditorError, ErrorCode } from '../../shared/errors/EditorError';
+
+/**
+ * X2T 导出选项
+ */
+export interface X2TExportOptions {
+  /**
+   * 源文件名（含扩展名），用于让 x2t 正确识别源格式。
+   * 当源是 Editor.bin 等 ".bin" 二进制时，需配合 documentType 使用。
+   */
+  sourceName?: string;
+  /**
+   * 文档类型（word/cell/slide/pdf），源为 Editor.bin 时必需，
+   * 用于推导 Canvas 源格式码 (m_nFormatFrom)。
+   */
+  documentType?: DocumentType;
+  /**
+   * 嵌入的媒体资源（图片等）。
+   */
+  media?: Record<string, Uint8Array>;
+}
 
 /**
  * X2T 导出服务接口
@@ -12,9 +32,10 @@ export interface X2TExportService {
    * 使用 X2T 导出文档到指定格式
    * @param source - 源文档 Blob
    * @param format - 目标格式
+   * @param options - 导出选项（源名、文档类型、媒体等）
    * @returns 导出的文档 Blob
    */
-  exportWithX2T(source: Blob, format: ExportFormat): Promise<Blob>;
+  exportWithX2T(source: Blob, format: ExportFormat, options?: X2TExportOptions): Promise<Blob>;
 }
 
 /**
@@ -99,7 +120,18 @@ export class ExportDocumentUseCase {
           downloadError instanceof Error ? { error: downloadError.message, stack: downloadError.stack } : { error: downloadError }
         );
 
-        // 策略 3: 回退到 X2T 转换
+        // PDF 无法在浏览器内用 wasm x2t 生成（doctrenderer 被裁剪），
+        // downloadAs 失败意味着后端转码也不可用，直接抛错避免产出损坏文件。
+        if (format === "pdf") {
+          throw new EditorError(
+            ErrorCode.EXPORT_FAILED,
+            '导出 PDF 失败：需要后端转码服务（wasm 版 x2t 不含 PDF 渲染能力）。请配置 backendUrl 并将 mode 设为 server/auto。',
+            undefined,
+            { format, docId: session.docId }
+          );
+        }
+
+        // 策略 3: 回退到 X2T 转换（非 PDF 格式）
         const source = sourceBlob || session.sourceBlob;
 
         if (!source || source.size === 0) {
@@ -111,7 +143,10 @@ export class ExportDocumentUseCase {
           );
         }
 
-        const exported = await this.x2tService.exportWithX2T(source, format);
+        const exported = await this.x2tService.exportWithX2T(source, format, {
+          sourceName: session.converted.title,
+          documentType: session.converted.documentType,
+        });
 
         this.logger.info('Document exported successfully via X2T', {
           docId: session.docId,
