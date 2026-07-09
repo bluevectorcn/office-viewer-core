@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rakyll/magicmime"
+
+	"office-viewer-backend/csvdetector"
 )
 
 // 并发队列配置
@@ -240,35 +244,31 @@ func handleConvert(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to download file from remote URL: %v", downloadErr)})
 			return
 		}
-
-		// 使用 magicmime 检测文件类型
-		if mimeType, err := magicmime.TypeByFile(tmpUploadPath); err == nil {
-			ext = mimeToExt(mimeType)
-			log.Printf("[Task %s] Downloaded file MIME type: %s, mapped extension: %s\n", taskId, mimeType, ext)
-		}
 	} else {
 		// 保存上传的原始文档文件
 		if err := c.SaveUploadedFile(file, tmpUploadPath); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
 			return
 		}
+	}
 
-		// 使用 magicmime 检测文件类型
+	// 优先根据原文件名的后缀进行判定，若原文件名后缀是支持的有效格式，则绝不使用 magicmime 覆盖它
+	titleExt := filepath.Ext(title)
+	if titleExt != "" && isSupportedExtension(titleExt) {
+		ext = titleExt
+		log.Printf("[Task %s] Using supported extension from title: %s\n", taskId, ext)
+	} else {
+		// 只有在原文件名无有效后缀时，才通过 magicmime 进行推导
 		if mimeType, err := magicmime.TypeByFile(tmpUploadPath); err == nil {
 			ext = mimeToExt(mimeType)
 			log.Printf("[Task %s] Detected MIME type: %s, mapped extension: %s\n", taskId, mimeType, ext)
-		} else {
-			log.Printf("[Task %s] Failed to detect MIME type: %v\n", taskId, err)
 		}
-	}
-
-	// 如果 magicmime 没有检测出有效后缀，则回退到原文件名的后缀
-	if ext == "" {
-		ext = filepath.Ext(title)
-	}
-	// 如果依然为空，则回退到默认 of `.docx`
-	if ext == "" {
-		ext = ".docx"
+		if ext == "" && titleExt != "" {
+			ext = titleExt
+		}
+		if ext == "" {
+			ext = ".docx"
+		}
 	}
 
 	inputFileName := "document" + ext
@@ -300,8 +300,52 @@ func handleConvert(c *gin.Context) {
 		absThemeDir = themeDir
 	}
 
-	formatFrom := getAvsFormatFrom(ext)
-	formatTo := getAvsFormatTo(ext)
+	formatFrom := strconv.Itoa(getAvsFormatFrom(ext))
+	formatTo := strconv.Itoa(getAvsFormatTo(ext))
+
+	var csvNodes string
+	if ext == ".csv" {
+		csvEncoding := 65001
+		csvDelimiter := 4
+		csvDelimiterChar := ","
+
+		// 检查前端是否有传参
+		reqDelimiter := c.PostForm("csvDelimiter")
+		reqDelimiterChar := c.PostForm("csvDelimiterChar")
+		reqEncoding := c.PostForm("csvEncoding")
+
+		hasFrontOptions := reqDelimiter != ""
+
+		if hasFrontOptions {
+			if val, err := strconv.Atoi(reqDelimiter); err == nil {
+				csvDelimiter = val
+			}
+			csvDelimiterChar = reqDelimiterChar
+			if reqEncoding != "" {
+				if val, err := strconv.Atoi(reqEncoding); err == nil {
+					csvEncoding = val
+				}
+			} else {
+				// 前端未指定编码，由后端探测编码
+				fileBytes, err := os.ReadFile(inputFilePath)
+				if err == nil {
+					csvEncoding = csvdetector.DetectCsvEncoding(fileBytes)
+				}
+			}
+		} else {
+			// 前端未识别（无后缀透传场景），后端自动探测编码与分隔符
+			fileBytes, err := os.ReadFile(inputFilePath)
+			if err == nil {
+				csvEncoding = csvdetector.DetectCsvEncoding(fileBytes)
+				csvDelimiter, csvDelimiterChar = csvdetector.DetectCsvDelimiter(fileBytes, csvEncoding)
+			}
+		}
+
+		log.Printf("[Task %s] CSV Parameters - Encoding CodePage: %d, Delimiter: %d, Char: %q\n", taskId, csvEncoding, csvDelimiter, csvDelimiterChar)
+		mappedEncoding := mapCodePageToIndex(csvEncoding)
+		escapedChar := html.EscapeString(csvDelimiterChar)
+		csvNodes = fmt.Sprintf("\n  <m_nCsvTxtEncoding>%d</m_nCsvTxtEncoding>\n  <m_nCsvDelimiter>%d</m_nCsvDelimiter>\n  <m_nCsvDelimiterChar>%s</m_nCsvDelimiterChar>", mappedEncoding, csvDelimiter, escapedChar)
+	}
 
 	paramsContent := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
 <TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
@@ -311,7 +355,7 @@ func handleConvert(c *gin.Context) {
   <m_sFileTo>%s</m_sFileTo>
   <m_nFormatFrom>%s</m_nFormatFrom>
   <m_nFormatTo>%s</m_nFormatTo>
-  <m_bIsNoBase64>true</m_bIsNoBase64>
+  <m_bIsNoBase64>true</m_bIsNoBase64>%s
   <m_oInputLimits>
     <m_oInputLimit type="docx;dotx;docm;dotm">
       <m_oZip uncompressed="52428800" template="*.xml" />
@@ -322,9 +366,9 @@ func handleConvert(c *gin.Context) {
     <m_oInputLimit type="pptx;ppsx;potx;pptm;ppsm;potm">
       <m_oZip uncompressed="52428800" template="*.xml" />
     </m_oInputLimit>
-  </m_oInputLimits>
-</TaskQueueDataConvert>`, absFontDir, absThemeDir, inputFilePath, outputFilePath, formatFrom, formatTo)
+</TaskQueueDataConvert>`, absFontDir, absThemeDir, inputFilePath, outputFilePath, formatFrom, formatTo, csvNodes)
 
+	log.Printf("[Task %s] Generated params.xml content:\n%s\n", taskId, paramsContent)
 	if err := os.WriteFile(paramsPath, []byte(paramsContent), 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate parameters file"})
 		return
@@ -353,7 +397,7 @@ func handleConvert(c *gin.Context) {
 		})
 		return
 	}
-	log.Printf("[Task %s] Conversion completed successfully.\n", taskId)
+	log.Printf("[Task %s] Conversion completed successfully. x2t output: %s\n", taskId, string(outputBytes))
 
 	// 7. 扫描生成的 media 文件夹下的静态多媒体图片并返回 URL
 	images := make(map[string]string)
@@ -485,92 +529,7 @@ func startCleanupTimer(interval time.Duration) {
 	}
 }
 
-// getAvsFileType maps a file extension to OnlyOffice AvsFileType integer
-// getAvsFormatFrom maps file extension to OnlyOffice AvsFileType hex string
-func getAvsFormatFrom(ext string) string {
-	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
-	switch normalized {
-	// Word (Document)
-	case "docx":
-		return "0x0041"
-	case "doc":
-		return "0x0042"
-	case "odt":
-		return "0x0043"
-	case "rtf":
-		return "0x0044"
-	case "txt":
-		return "0x0045"
-	case "html", "htm":
-		return "0x0046"
-	case "epub":
-		return "0x0048"
-
-	// Slide (Presentation)
-	case "pptx":
-		return "0x0081"
-	case "ppt":
-		return "0x0082"
-
-	// Cell (Spreadsheet)
-	case "xlsx":
-		return "0x0101"
-	case "xls":
-		return "0x0102"
-	case "csv":
-		return "0x0104"
-
-	// PDF
-	case "pdf":
-		return "0x0201"
-
-	default:
-		return "0x0000"
-	}
-}
-
-// getAvsFormatTo maps file extension to Canvas rendering format hex string based on document classes
-func getAvsFormatTo(ext string) string {
-	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
-	switch normalized {
-	// doc, docx 等 word 类
-	case "doc", "docx", "odt", "rtf", "txt", "html", "htm", "epub":
-		return "0x2001"
-	// xls, xlsx 等 excel 类
-	case "xls", "xlsx", "ods", "csv":
-		return "0x2002"
-	// ppt, pptx 等 ppt 类
-	case "ppt", "pptx", "odp":
-		return "0x2003"
-	// pdf 类统一使用 0x2001
-	case "pdf":
-		return "0x2001"
-	default:
-		return "0x2001"
-	}
-}
-
-// getAvsCanvasFormat maps documentType (word/cell/slide/pdf) to Editor.bin Canvas format code.
-// Editor.bin 是 OnlyOffice 编辑器内部 Canvas 格式，按文档类别区分：
-//
-//	word → 0x2001 (AVS_FILE_CANVAS_WORD)
-//	cell → 0x2002 (AVS_FILE_CANVAS_SPREADSHEET)
-//	slide → 0x2003 (AVS_FILE_CANVAS_PRESENTATION)
-//	pdf → 0x2004 (AVS_FILE_CANVAS_PDF)
-func getAvsCanvasFormat(documentType string) string {
-	switch strings.ToLower(documentType) {
-	case "cell":
-		return "0x2002"
-	case "slide":
-		return "0x2003"
-	case "pdf":
-		return "0x2004"
-	case "word":
-		fallthrough
-	default:
-		return "0x2001"
-	}
-}
+// Formatting utility constants and methods are imported from formats.go.
 
 // handleExportPdf 导出 PDF 控制器
 // 接收 multipart 上传的 file（renderer binary / Editor.bin 或原始 Office 文档）+ documentType，
@@ -665,24 +624,26 @@ func handleExportPdf(c *gin.Context) {
 	// 判断源格式码：
 	//   - 文件名是 *.bin（Editor.bin/renderer binary）→ 用 documentType 推导 Canvas 码
 	//   - 否则按扩展名推导
-	var formatFrom string
+	var formatFromVal int
 	uploadExt := strings.ToLower(filepath.Ext(fileName))
 	isEditorBin := uploadExt == ".bin" || uploadExt == ""
 	if isEditorBin {
 		if documentType == "" {
 			documentType = "word"
 		}
-		formatFrom = getAvsCanvasFormat(documentType)
+		formatFromVal = getAvsCanvasFormat(documentType)
 	} else {
-		formatFrom = getAvsFormatFrom(uploadExt)
-		if formatFrom == "0x0000" {
+		formatFromVal = getAvsFormatFrom(uploadExt)
+		if formatFromVal == AVS_FILE_UNKNOWN {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported source extension: %s", uploadExt)})
 			return
 		}
 	}
 
-	// 目标固定为 PDF (0x0201)
-	formatTo := "0x0201"
+	formatToVal := AVS_FILE_CROSSPLATFORM_PDF
+
+	formatFrom := strconv.Itoa(formatFromVal)
+	formatTo := strconv.Itoa(formatToVal)
 
 	// 字体与主题目录
 	fontDir := filepath.Join(".", "assets", "fonts") + string(filepath.Separator)
@@ -792,4 +753,31 @@ func downloadFile(url string, destPath string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+// isSupportedExtension 检查后缀是否为 OnlyOffice 支持 of 已知格式
+func isSupportedExtension(ext string) bool {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+	supported := map[string]bool{
+		"docx": true, "doc": true, "odt": true, "txt": true, "rtf": true,
+		"xlsx": true, "xls": true, "ods": true, "csv": true,
+		"pptx": true, "ppt": true, "odp": true, "pdf": true,
+	}
+	return supported[normalized]
+}
+
+// mapCodePageToIndex 映射 Windows CodePage 到 OnlyOffice 内部的编码 Index 标识
+func mapCodePageToIndex(codepage int) int {
+	switch codepage {
+	case 65001:
+		return 46 // UTF-8
+	case 936:
+		return 18 // GBK
+	case 1200:
+		return 48 // UTF-16LE
+	case 1201:
+		return 49 // UTF-16BE
+	default:
+		return 46 // Default to UTF-8
+	}
 }

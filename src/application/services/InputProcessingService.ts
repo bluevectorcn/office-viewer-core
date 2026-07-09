@@ -6,6 +6,11 @@ export interface PreparedInput {
   title: string;
   fileType: string;
   documentType: "word" | "cell" | "slide" | "pdf";
+  csvOptions?: {
+    delimiter: number;
+    delimiterChar: string;
+    encoding?: number;
+  };
 }
 
 export interface ConvertedInput {
@@ -110,7 +115,7 @@ export async function prepareInput(input: EditorInput): Promise<PreparedInput> {
 }
 
 export async function convertWithX2T(input: PreparedInput): Promise<ConvertedInput> {
-  const { blob, objectUrl, media } = await convertToEditorBin(input.file, input.title);
+  const { blob, objectUrl, media } = await convertToEditorBin(input.file, input.title, input.csvOptions);
 
   return {
     url: objectUrl,

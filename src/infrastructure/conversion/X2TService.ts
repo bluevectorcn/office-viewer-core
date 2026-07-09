@@ -232,8 +232,13 @@ function prepareWorkingDir(FS: X2TFS) {
 }
 
 type ParamsXmlOptions = {
-  formatFrom: AvsFileType;
-  formatTo: AvsFileType;
+  formatFrom?: AvsFileType;
+  formatTo?: AvsFileType;
+  csvOptions?: {
+    delimiter: number;
+    delimiterChar: string;
+    encoding?: number;
+  };
 };
 
 /**
@@ -279,9 +284,24 @@ function resolveExportFormatTo(format: ExportFormat): AvsFileType {
   }
 }
 
+function mapCodePageToIndex(codepage: number): number {
+  switch (codepage) {
+    case 65001: return 46; // UTF-8
+    case 936:   return 18; // GBK
+    case 1200:  return 48; // UTF-16LE
+    case 1201:  return 49; // UTF-16BE
+    default:    return 46; // Default to UTF-8
+  }
+}
+
 function buildParamsXml(fileFrom: string, fileTo: string, options?: ParamsXmlOptions) {
   const formatFrom = options?.formatFrom ? `<m_nFormatFrom>${options?.formatFrom}</m_nFormatFrom>` : "";
   const formatTo = options?.formatTo ? `<m_nFormatTo>${options?.formatTo}</m_nFormatTo>` : "";
+
+  const rawEncoding = options?.csvOptions?.encoding ?? 65001;
+  const encoding = mapCodePageToIndex(rawEncoding);
+  const delimiter = options?.csvOptions?.delimiter ?? 4;
+  const delimiterChar = options?.csvOptions?.delimiterChar ?? ",";
 
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
@@ -293,9 +313,9 @@ function buildParamsXml(fileFrom: string, fileTo: string, options?: ParamsXmlOpt
     formatFrom,
     formatTo,
     "<m_bIsNoBase64>false</m_bIsNoBase64>",
-    "<m_nCsvTxtEncoding>65001</m_nCsvTxtEncoding>",
-    "<m_nCsvDelimiter>4</m_nCsvDelimiter>",
-    "<m_sCsvDelimiterChar>,</m_sCsvDelimiterChar>",
+    `<m_nCsvTxtEncoding>${encoding}</m_nCsvTxtEncoding>`,
+    `<m_nCsvDelimiter>${delimiter}</m_nCsvDelimiter>`,
+    `<m_nCsvDelimiterChar>${delimiterChar}</m_nCsvDelimiterChar>`,
     "</TaskQueueDataConvert>",
   ].join("");
 }
@@ -392,7 +412,11 @@ function getRuntime(module: X2TModule): X2TRuntime {
 }
 
 
-export async function convertToEditorBin(input: File, title: string) {
+export async function convertToEditorBin(
+  input: File,
+  title: string,
+  csvOptions?: { delimiter: number; delimiterChar: string; encoding?: number }
+) {
   const module = await initX2TModule();
   const runtime = getRuntime(module);
   const FS = runtime.FS;
@@ -441,7 +465,7 @@ export async function convertToEditorBin(input: File, title: string) {
       });
     }
   } else {
-    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH);
+    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH, { csvOptions });
     FS.writeFile(PARAMS_PATH, paramsXml);
     if (sourceExt === "csv") {
       const code = runX2TCode(runtime, PARAMS_PATH);

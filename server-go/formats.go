@@ -1,0 +1,202 @@
+package main
+
+import (
+	"strings"
+)
+
+// AVS OfficeStudio File Formats, referencing OfficeFileFormats.h
+const (
+	AVS_FILE_UNKNOWN = 0x0000
+
+	// Document Class
+	AVS_FILE_DOCUMENT           = 0x0040
+	AVS_FILE_DOCUMENT_DOCX      = AVS_FILE_DOCUMENT + 0x0001
+	AVS_FILE_DOCUMENT_DOC       = AVS_FILE_DOCUMENT + 0x0002
+	AVS_FILE_DOCUMENT_ODT       = AVS_FILE_DOCUMENT + 0x0003
+	AVS_FILE_DOCUMENT_RTF       = AVS_FILE_DOCUMENT + 0x0004
+	AVS_FILE_DOCUMENT_TXT       = AVS_FILE_DOCUMENT + 0x0005
+	AVS_FILE_DOCUMENT_HTML      = AVS_FILE_DOCUMENT + 0x0006
+	AVS_FILE_DOCUMENT_MHT       = AVS_FILE_DOCUMENT + 0x0007
+	AVS_FILE_DOCUMENT_EPUB      = AVS_FILE_DOCUMENT + 0x0008
+	AVS_FILE_DOCUMENT_FB2       = AVS_FILE_DOCUMENT + 0x0009
+	AVS_FILE_DOCUMENT_MOBI      = AVS_FILE_DOCUMENT + 0x000a
+	AVS_FILE_DOCUMENT_DOCM      = AVS_FILE_DOCUMENT + 0x000b
+	AVS_FILE_DOCUMENT_DOTX      = AVS_FILE_DOCUMENT + 0x000c
+	AVS_FILE_DOCUMENT_DOTM      = AVS_FILE_DOCUMENT + 0x000d
+	AVS_FILE_DOCUMENT_ODT_FLAT  = AVS_FILE_DOCUMENT + 0x000e
+	AVS_FILE_DOCUMENT_OTT       = AVS_FILE_DOCUMENT + 0x000f
+	AVS_FILE_DOCUMENT_DOC_FLAT  = AVS_FILE_DOCUMENT + 0x0010
+	AVS_FILE_DOCUMENT_DOCX_FLAT = AVS_FILE_DOCUMENT + 0x0011
+
+	// Presentation Class
+	AVS_FILE_PRESENTATION              = 0x0080
+	AVS_FILE_PRESENTATION_PPTX         = AVS_FILE_PRESENTATION + 0x0001
+	AVS_FILE_PRESENTATION_PPT          = AVS_FILE_PRESENTATION + 0x0002
+	AVS_FILE_PRESENTATION_ODP          = AVS_FILE_PRESENTATION + 0x0003
+	AVS_FILE_PRESENTATION_PPSX         = AVS_FILE_PRESENTATION + 0x0004
+	AVS_FILE_PRESENTATION_PPTM         = AVS_FILE_PRESENTATION + 0x0005
+	AVS_FILE_PRESENTATION_PPSM         = AVS_FILE_PRESENTATION + 0x0006
+	AVS_FILE_PRESENTATION_POTX         = AVS_FILE_PRESENTATION + 0x0007
+	AVS_FILE_PRESENTATION_POTM         = AVS_FILE_PRESENTATION + 0x0008
+	AVS_FILE_PRESENTATION_ODP_FLAT     = AVS_FILE_PRESENTATION + 0x0009
+	AVS_FILE_PRESENTATION_OTP          = AVS_FILE_PRESENTATION + 0x000a
+	AVS_FILE_PRESENTATION_PPTX_PACKAGE = AVS_FILE_PRESENTATION + 0x000b
+	AVS_FILE_PRESENTATION_ODG          = AVS_FILE_PRESENTATION + 0x000c
+	AVS_FILE_PRESENTATION_KEY          = AVS_FILE_PRESENTATION + 0x000d
+
+	// Spreadsheet Class
+	AVS_FILE_SPREADSHEET              = 0x0100
+	AVS_FILE_SPREADSHEET_XLSX         = AVS_FILE_SPREADSHEET + 0x0001
+	AVS_FILE_SPREADSHEET_XLS          = AVS_FILE_SPREADSHEET + 0x0002
+	AVS_FILE_SPREADSHEET_ODS          = AVS_FILE_SPREADSHEET + 0x0003
+	AVS_FILE_SPREADSHEET_CSV          = AVS_FILE_SPREADSHEET + 0x0004
+	AVS_FILE_SPREADSHEET_XLSM         = AVS_FILE_SPREADSHEET + 0x0005
+	AVS_FILE_SPREADSHEET_XLTX         = AVS_FILE_SPREADSHEET + 0x0006
+	AVS_FILE_SPREADSHEET_XLTM         = AVS_FILE_SPREADSHEET + 0x0007
+	AVS_FILE_SPREADSHEET_XLSB         = AVS_FILE_SPREADSHEET + 0x0008
+	AVS_FILE_SPREADSHEET_ODS_FLAT     = AVS_FILE_SPREADSHEET + 0x0009
+	AVS_FILE_SPREADSHEET_OTS          = AVS_FILE_SPREADSHEET + 0x000a
+	AVS_FILE_SPREADSHEET_XLSX_FLAT    = AVS_FILE_SPREADSHEET + 0x000b
+	AVS_FILE_SPREADSHEET_XLSX_PACKAGE = AVS_FILE_SPREADSHEET + 0x000c
+	AVS_FILE_SPREADSHEET_TSV          = AVS_FILE_SPREADSHEET + 0x0014
+	AVS_FILE_SPREADSHEET_SCSV         = AVS_FILE_SPREADSHEET + 0x0024
+
+	// Crossplatform Class
+	AVS_FILE_CROSSPLATFORM             = 0x0200
+	AVS_FILE_CROSSPLATFORM_PDF         = AVS_FILE_CROSSPLATFORM + 0x0001
+	AVS_FILE_CROSSPLATFORM_SWF         = AVS_FILE_CROSSPLATFORM + 0x0002
+	AVS_FILE_CROSSPLATFORM_DJVU        = AVS_FILE_CROSSPLATFORM + 0x0003
+	AVS_FILE_CROSSPLATFORM_XPS         = AVS_FILE_CROSSPLATFORM + 0x0004
+	AVS_FILE_CROSSPLATFORM_SVG         = AVS_FILE_CROSSPLATFORM + 0x0005
+	AVS_FILE_CROSSPLATFORM_HTMLR       = AVS_FILE_CROSSPLATFORM + 0x0006
+	AVS_FILE_CROSSPLATFORM_HTMLR_MENU  = AVS_FILE_CROSSPLATFORM + 0x0007
+	AVS_FILE_CROSSPLATFORM_HTMLR_CANVAS= AVS_FILE_CROSSPLATFORM + 0x0008
+	AVS_FILE_CROSSPLATFORM_PDFA        = AVS_FILE_CROSSPLATFORM + 0x0009
+	AVS_FILE_CROSSPLATFORM_OFD         = AVS_FILE_CROSSPLATFORM + 0x000a
+
+	// Canvas Class
+	AVS_FILE_CANVAS              = 0x2000
+	AVS_FILE_CANVAS_WORD         = AVS_FILE_CANVAS + 0x0001
+	AVS_FILE_CANVAS_SPREADSHEET  = AVS_FILE_CANVAS + 0x0002
+	AVS_FILE_CANVAS_PRESENTATION = AVS_FILE_CANVAS + 0x0003
+	AVS_FILE_CANVAS_PDF          = AVS_FILE_CANVAS + 0x0004
+	AVS_FILE_CANVAS_DRAW         = AVS_FILE_CANVAS + 0x0005
+)
+
+// getAvsFormatFrom maps file extension to OnlyOffice AvsFileType integer
+func getAvsFormatFrom(ext string) int {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+	switch normalized {
+	// Word (Document)
+	case "docx":
+		return AVS_FILE_DOCUMENT_DOCX
+	case "doc":
+		return AVS_FILE_DOCUMENT_DOC
+	case "odt":
+		return AVS_FILE_DOCUMENT_ODT
+	case "rtf":
+		return AVS_FILE_DOCUMENT_RTF
+	case "txt":
+		return AVS_FILE_DOCUMENT_TXT
+	case "html", "htm":
+		return AVS_FILE_DOCUMENT_HTML
+	case "mht":
+		return AVS_FILE_DOCUMENT_MHT
+	case "epub":
+		return AVS_FILE_DOCUMENT_EPUB
+	case "fb2":
+		return AVS_FILE_DOCUMENT_FB2
+	case "mobi":
+		return AVS_FILE_DOCUMENT_MOBI
+	case "docm":
+		return AVS_FILE_DOCUMENT_DOCM
+	case "dotx":
+		return AVS_FILE_DOCUMENT_DOTX
+	case "dotm":
+		return AVS_FILE_DOCUMENT_DOTM
+
+	// Presentation
+	case "pptx":
+		return AVS_FILE_PRESENTATION_PPTX
+	case "ppt":
+		return AVS_FILE_PRESENTATION_PPT
+	case "odp":
+		return AVS_FILE_PRESENTATION_ODP
+	case "ppsx":
+		return AVS_FILE_PRESENTATION_PPSX
+	case "pptm":
+		return AVS_FILE_PRESENTATION_PPTM
+	case "ppsm":
+		return AVS_FILE_PRESENTATION_PPSM
+	case "potx":
+		return AVS_FILE_PRESENTATION_POTX
+	case "potm":
+		return AVS_FILE_PRESENTATION_POTM
+
+	// Spreadsheet
+	case "xlsx":
+		return AVS_FILE_SPREADSHEET_XLSX
+	case "xls":
+		return AVS_FILE_SPREADSHEET_XLS
+	case "ods":
+		return AVS_FILE_SPREADSHEET_ODS
+	case "csv":
+		return AVS_FILE_SPREADSHEET_CSV
+	case "xlsm":
+		return AVS_FILE_SPREADSHEET_XLSM
+	case "xltx":
+		return AVS_FILE_SPREADSHEET_XLTX
+	case "xltm":
+		return AVS_FILE_SPREADSHEET_XLTM
+	case "xlsb":
+		return AVS_FILE_SPREADSHEET_XLSB
+
+	// Crossplatform
+	case "pdf":
+		return AVS_FILE_CROSSPLATFORM_PDF
+
+	default:
+		return AVS_FILE_UNKNOWN
+	}
+}
+
+// getAvsFormatTo maps file extension to Canvas rendering format integer based on document classes
+func getAvsFormatTo(ext string) int {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+	switch normalized {
+	// Word (Document)
+	case "docx", "doc", "odt", "rtf", "txt", "html", "htm", "mht", "epub", "fb2", "mobi", "docm", "dotx", "dotm":
+		return AVS_FILE_CANVAS_WORD
+
+	// Spreadsheet
+	case "xlsx", "xls", "ods", "csv", "xlsm", "xltx", "xltm", "xlsb":
+		return AVS_FILE_CANVAS_SPREADSHEET
+
+	// Presentation
+	case "pptx", "ppt", "odp", "ppsx", "pptm", "ppsm", "potx", "potm":
+		return AVS_FILE_CANVAS_PRESENTATION
+
+	// Crossplatform
+	case "pdf":
+		return AVS_FILE_CANVAS_PDF
+
+	default:
+		return AVS_FILE_CANVAS_WORD
+	}
+}
+
+// getAvsCanvasFormat maps documentType to OnlyOffice Canvas rendering format integer
+func getAvsCanvasFormat(docType string) int {
+	switch strings.ToLower(docType) {
+	case "cell":
+		return AVS_FILE_CANVAS_SPREADSHEET
+	case "slide":
+		return AVS_FILE_CANVAS_PRESENTATION
+	case "pdf":
+		return AVS_FILE_CANVAS_PDF
+	case "word":
+		fallthrough
+	default:
+		return AVS_FILE_CANVAS_WORD
+	}
+}

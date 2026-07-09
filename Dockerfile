@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend
-FROM --platform=linux/amd64 node:24-bookworm-slim AS frontend-builder
+FROM node:24-bookworm-slim AS frontend-builder
 WORKDIR /build
 
 # 安装 pnpm
@@ -22,7 +22,7 @@ COPY vendor/ ./vendor/
 RUN pnpm build
 
 # Stage 2: Build the Go binary
-FROM --platform=linux/amd64 golang:1.20-bookworm AS backend-builder
+FROM golang:1.20-bookworm AS backend-builder
 # 安装 magic 开发库以编译后端 CGO
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic-dev \
@@ -30,11 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 COPY server-go/go.mod server-go/go.sum ./
 RUN go mod download
-COPY server-go/main.go ./
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend main.go
+COPY server-go/*.go ./
+COPY server-go/csvdetector/ ./csvdetector/
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend .
 
 # Stage 3: Final runtime environment
-FROM --platform=linux/amd64 debian:bookworm-slim
+FROM debian:bookworm-slim
 
 # 安装运行所需的动态链接库 (OnlyOffice 原生所需要的系统基础库)
 RUN apt-get update && apt-get install -y --no-install-recommends \

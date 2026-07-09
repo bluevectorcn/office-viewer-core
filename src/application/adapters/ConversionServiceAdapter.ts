@@ -77,11 +77,18 @@ export class ConversionServiceAdapter implements ConversionService {
       return this.convertWithWasm(prepared);
     }
 
+    const isCsv = fileName.toLowerCase().endsWith('.csv') || (file instanceof Blob && file.type === 'text/csv');
+    let csvOptions: { delimiter: number; delimiterChar: string; encoding?: number } | undefined;
+    if (isCsv) {
+      const { showCsvDelimiterDialog } = await import('../../components/CsvDelimiterDialog');
+      csvOptions = await showCsvDelimiterDialog();
+    }
+
     const mode = this.config?.mode || 'wasm';
 
     if (mode === 'server') {
       try {
-        return await this.convertWithBackend(prepared);
+        return await this.convertWithBackend(prepared, csvOptions);
       } catch (err) {
         throw new Error(`后端辅助转码服务失败: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -89,21 +96,24 @@ export class ConversionServiceAdapter implements ConversionService {
 
     if (mode === 'auto') {
       try {
-        return await this.convertWithBackend(prepared);
+        return await this.convertWithBackend(prepared, csvOptions);
       } catch (err) {
         console.warn('后端辅助转码服务失败，自动降级至本地 WASM 转换模式', err);
-        return await this.convertWithWasm(prepared);
+        return await this.convertWithWasm(prepared, csvOptions);
       }
     }
 
     // 默认为纯前端 WASM 模式
-    return await this.convertWithWasm(prepared);
+    return await this.convertWithWasm(prepared, csvOptions);
   }
 
   /**
    * 使用 Go 后端服务进行 file 转码和资源加载
    */
-  private async convertWithBackend(prepared: UseCasePreparedInput): Promise<ConvertedDocument> {
+  private async convertWithBackend(
+    prepared: UseCasePreparedInput,
+    csvOptions?: { delimiter: number; delimiterChar: string; encoding?: number }
+  ): Promise<ConvertedDocument> {
     const remoteUrl = (prepared.file as any)._remoteUrl;
     const formData = new FormData();
     let fileName = prepared.title || 'document.docx';
@@ -119,6 +129,14 @@ export class ConversionServiceAdapter implements ConversionService {
       formData.append('file', file);
       formData.append('title', file.name);
       fileName = file.name;
+    }
+
+    if (csvOptions) {
+      formData.append('csvDelimiter', String(csvOptions.delimiter));
+      formData.append('csvDelimiterChar', csvOptions.delimiterChar);
+      if (csvOptions.encoding) {
+        formData.append('csvEncoding', String(csvOptions.encoding));
+      }
     }
 
     if (!this.config?.backendUrl) {
@@ -173,7 +191,10 @@ export class ConversionServiceAdapter implements ConversionService {
     };
   }
 
-  private async convertWithWasm(prepared: UseCasePreparedInput): Promise<ConvertedDocument> {
+  private async convertWithWasm(
+    prepared: UseCasePreparedInput,
+    csvOptions?: { delimiter: number; delimiterChar: string; encoding?: number }
+  ): Promise<ConvertedDocument> {
     let file: File;
     const remoteUrl = (prepared.file as any)._remoteUrl;
 
@@ -198,7 +219,8 @@ export class ConversionServiceAdapter implements ConversionService {
       file,
       title: prepared.title || 'document',
       fileType: this.getFileType(file.name),
-      documentType: this.inferDocumentType(file.name)
+      documentType: this.inferDocumentType(file.name),
+      csvOptions
     };
 
     const legacy: LegacyConvertedInput = await legacyConvertWithX2T(legacyPrepared);
