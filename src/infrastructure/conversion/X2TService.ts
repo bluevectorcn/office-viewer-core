@@ -569,16 +569,27 @@ export async function exportWithX2T(
  * Editor.bin / Office 文档渲染成 PDF 页面。后端的原生 x2t 带完整的
  * doctrenderer + PdfFile 库，能正确生成 PDF。
  *
- * @param source - 源文件字节（Editor.bin 或原始 docx/xlsx/pptx）
- * @param documentType - 文档类型（word/cell/slide/pdf），Editor.bin 时必需
+ * 关于图片：PDF 导出走 renderer binary 路径（OnlyOffice 的 ToRendererPart）。
+ * 对于注册在 g_oDocumentUrls 中的图片（原始文档图片、工具栏上传、剪贴板粘贴
+ * 等），renderer binary 里写的是 media/<path> 本地引用，x2t 需要从工作目录
+ * 读取这些文件。因此必须把 media 字节随请求一起上传，后端写入到
+ * <workDir>/<relPath> 供 x2t 解析。
+ *
+ * 同时，前端在编辑期已通过 registerBlobImageInOnlyOffice 把 blob URL 图片
+ * 注入 g_oDocumentBlobUrls，使序列化时 blob: 图片写成 inline base64（兜底）。
+ *
+ * @param source - 源文件字节（renderer binary / Editor.bin）
+ * @param documentType - 文档类型（word/cell/slide/pdf），用于推导 Canvas 源格式码
  * @param backendUrl - 后端服务基础 URL
  * @param fileName - 原始文件名（用于后端推断源格式）
+ * @param media - 图片字节映射（media/<path> -> bytes）
  */
 export async function exportPdfViaBackend(
   source: Uint8Array,
   documentType: DocumentType,
   backendUrl: string,
-  fileName?: string
+  fileName?: string,
+  media?: Record<string, Uint8Array>
 ): Promise<Blob> {
   const formData = new FormData();
   const blob = new Blob([source.slice()], { type: "application/octet-stream" });
@@ -587,11 +598,31 @@ export async function exportPdfViaBackend(
   if (fileName) {
     formData.append("fileName", fileName);
   }
+  if (media) {
+    const mediaPaths: Record<string, string> = {};
+    let idx = 0;
+    for (const [key, value] of Object.entries(media)) {
+      const fieldName = `media_${idx}`;
+      formData.append(fieldName, new Blob([value as any]), `file_${idx}`);
+      mediaPaths[fieldName] = key;
+      idx++;
+    }
+    formData.append("mediaPaths", JSON.stringify(mediaPaths));
+  }
 
-  const response = await fetch(`${backendUrl}/api/export-pdf`, {
-    method: "POST",
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/export-pdf`, {
+      method: "POST",
+      body: formData,
+    });
+  } catch (error) {
+    // 网络层失败：后端未启动 / 端口不通 / CORS 被浏览器拦截等。
+    // 给出明确提示，避免被误判为转换逻辑问题。
+    throw new Error(
+      `无法连接 PDF 导出后端 (${backendUrl}/api/export-pdf)：${error instanceof Error ? error.message : error}。请确认后端服务已启动且 backendUrl 配置正确。`
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");

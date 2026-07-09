@@ -339,15 +339,6 @@ function completeSave(
   return response;
 }
 
-async function fetchEditorBin(editorUrl: string): Promise<Uint8Array> {
-  const response = await fetch(editorUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Editor.bin: ${response.status}`);
-  }
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
-}
-
 /**
  * 确保所有媒体资源（图片等）的字节数据可用，用于另存为时喂给 x2t。
  *
@@ -386,16 +377,24 @@ async function ensureMediaData(
         try {
           const response = await fetch(url);
           if (!response.ok) {
-            console.warn(`Failed to fetch media "${key}": ${response.status}`);
+            console.warn(`[ensureMediaData] Failed to fetch media "${key}" from "${url}": ${response.status}`);
             return;
           }
           const buffer = await response.arrayBuffer();
           mediaData[key] = new Uint8Array(buffer);
         } catch (error) {
-          console.warn(`Failed to fetch media "${key}"`, error);
+          console.warn(`[ensureMediaData] Failed to fetch media "${key}" from "${url}"`, error);
         }
       })
     );
+  }
+
+  if (DEBUG_LOCAL_SAVE) {
+    debugLog("ensureMediaData result", {
+      imageKeys: Object.keys(assets.images),
+      mediaDataKeys: Object.keys(mediaData),
+      missingKeys: missing.map(([k]) => k),
+    });
   }
 
   return Object.keys(mediaData).length > 0 ? mediaData : undefined;
@@ -412,6 +411,7 @@ async function finalizeSave(
     debugLog("finalizeSave missing assets", { docId, command: resolveCommand(cmd) });
     return null;
   }
+
   const outputExt = resolveOutputExtension(cmd, assets);
   const exportFormat = toExportFormat(outputExt, assets);
   const baseTitle =
@@ -440,9 +440,12 @@ async function finalizeSave(
       return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave zip passthrough");
     }
 
-    // PDF 专用路径：wasm 版 x2t 裁剪了 doctrenderer（依赖 V8），无法在浏览器内
-    // 把 Editor.bin 渲染成 PDF。必须依赖 Go 后端的原生 x2t（带完整 doctrenderer +
-    // PdfFile 库）来完成 Editor.bin → PDF 转换。
+    // PDF 专用路径：
+    // OnlyOffice 导出 PDF 时通过 ToRendererPart() 生成 renderer binary（Canvas 渲染
+    // 格式），而非 Editor.bin/zip。图片字节已在编辑时通过 registerBlobImageInOnlyOffice
+    // 注入 g_oDocumentBlobUrls，序列化时写出 inline base64，后端 x2t 可直接渲染。
+    //
+    // wasm 版 x2t 裁剪了 doctrenderer（依赖 V8），无法渲染 PDF，必须走 Go 后端。
     if (exportFormat === "pdf") {
       const { mode, backendUrl } = resolveBackendConfig(targetWindow);
       if (!backendUrl) {
@@ -456,8 +459,16 @@ async function finalizeSave(
         );
       }
       const documentType = assets.documentType ?? "word";
-      const editorBin = await fetchEditorBin(assets.editorUrl);
-      const blob = await exportPdfViaBackend(editorBin, documentType, backendUrl, assets.title);
+      // renderer binary 里图片以 media/<path> 引用，需把字节一起上传给后端 x2t。
+      // ensureMediaData 会拉取所有缺失字节的图片（含远程 URL 与 blob URL）。
+      const mediaData = await ensureMediaData(assets);
+      const blob = await exportPdfViaBackend(
+        bytes,
+        documentType,
+        backendUrl,
+        "Editor.bin",
+        mediaData
+      );
       return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave pdf via backend");
     }
 
@@ -477,7 +488,7 @@ async function finalizeSave(
     return completeSave(targetWindow, docId, cmd, outputExt, title, blob, "finalizeSave success");
   } catch (error) {
     console.error("finalizeSave failed", error);
-    // PDF 导出失败时不能回退到原始字节（那是 pdf.bin 渲染数据或 Editor.bin，不是合法 PDF，
+    // PDF 导出失败时不能回退到原始字节（那是 renderer binary 或 Editor.bin，不是合法 PDF，
     // 会产出无法打开的文件）。向上抛错，让编辑器向用户展示失败信息。
     if (exportFormat === "pdf") {
       throw error;

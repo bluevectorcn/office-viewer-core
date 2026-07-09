@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -457,12 +458,17 @@ func getAvsCanvasFormat(documentType string) string {
 }
 
 // handleExportPdf 导出 PDF 控制器
-// 接收 multipart 上传的 file（Editor.bin 或原始 Office 文档）+ documentType，
+// 接收 multipart 上传的 file（renderer binary / Editor.bin 或原始 Office 文档）+ documentType，
 // 调用原生 x2t（带 doctrenderer）转换为 PDF，直接返回 PDF 字节流。
+//
+// 注意：PDF 导出时前端 OnlyOffice 通过 ToRendererPart() 生成 renderer binary（Canvas
+// 渲染格式），其中图片字节已在编辑时注入 g_oDocumentBlobUrls，序列化时已写成 inline
+// base64。因此本接口无需再单独接收 media 字节或做 ZIP 关系修补——直接把 renderer
+// binary 喂给 x2t 即可。
 //
 // 表单字段：
 //
-//	file          - 上传的文件（Editor.bin 或 docx/xlsx/pptx 等）
+//	file          - 上传的文件（renderer binary / Editor.bin 或 docx/xlsx/pptx 等）
 //	documentType  - word/cell/slide/pdf（当 file 是 Editor.bin 时必需）
 //	fileName      - 原始文件名（可选，用于推断源格式）
 func handleExportPdf(c *gin.Context) {
@@ -496,8 +502,53 @@ func handleExportPdf(c *gin.Context) {
 		return
 	}
 
+	// 1. 接收并保存可能存在的 media 资源文件。
+	// renderer binary 里图片以 media/<path> 本地引用，x2t 需从工作目录读取，
+	// 因此把前端上传的 media 字节写入 <workDir>/<relPath>。
+	mediaPathsStr := c.PostForm("mediaPaths")
+	if mediaPathsStr != "" {
+		var mediaPaths map[string]string
+		if err := json.Unmarshal([]byte(mediaPathsStr), &mediaPaths); err == nil {
+			form, err := c.MultipartForm()
+			if err == nil && form != nil {
+				for fieldName, relPath := range mediaPaths {
+					files := form.File[fieldName]
+					if len(files) == 0 {
+						continue
+					}
+					fileHeader := files[0]
+
+					// 防御路径穿越漏洞
+					cleanRelPath := filepath.Clean(relPath)
+					if strings.HasPrefix(cleanRelPath, "..") || filepath.IsAbs(cleanRelPath) {
+						log.Printf("[Task %s] Warning: Ignored media file with invalid path: %s\n", taskId, relPath)
+						continue
+					}
+
+					targetPath := filepath.Join(workDir, cleanRelPath)
+					parentDir := filepath.Dir(targetPath)
+					mu.Lock()
+					mkdirErr := os.MkdirAll(parentDir, 0755)
+					mu.Unlock()
+					if mkdirErr != nil {
+						log.Printf("[Task %s] Failed to create media subdirectory %s: %v\n", taskId, parentDir, mkdirErr)
+						continue
+					}
+
+					if err := c.SaveUploadedFile(fileHeader, targetPath); err != nil {
+						log.Printf("[Task %s] Failed to save media file %s: %v\n", taskId, relPath, err)
+						continue
+					}
+					log.Printf("[Task %s] Saved media file to: %s\n", taskId, cleanRelPath)
+				}
+			}
+		} else {
+			log.Printf("[Task %s] Failed to parse mediaPaths: %v\n", taskId, err)
+		}
+	}
+
 	// 判断源格式码：
-	//   - 文件名是 *.bin（Editor.bin）→ 用 documentType 推导 Canvas 码
+	//   - 文件名是 *.bin（Editor.bin/renderer binary）→ 用 documentType 推导 Canvas 码
 	//   - 否则按扩展名推导
 	var formatFrom string
 	uploadExt := strings.ToLower(filepath.Ext(fileName))

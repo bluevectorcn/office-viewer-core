@@ -110,7 +110,15 @@ export function injectGlobals(targetWindow: Window = window) {
   };
 
   const factory = function io(options?: unknown) {
-    return new FakeSocket(options as ConstructorParameters<typeof FakeSocket>[0]);
+    // 显式把当前注入目标 window（iframe contentWindow）传给 socket，
+    // 使其能访问 iframe 的 AscCommon（g_oDocumentBlobUrls 等注册表）。
+    // 模块级 window 指向宿主页，无法访问 iframe 上下文。
+    const opts: ConstructorParameters<typeof FakeSocket>[0] =
+      options && typeof options === 'object'
+        ? { ...(options as object) }
+        : {};
+    opts.hostWindow = targetWindow;
+    return new FakeSocket(opts);
   };
 
   try {

@@ -1,4 +1,5 @@
 import { getDocumentAssets, registerDocumentImageAsset } from "./AssetsStore";
+import { registerBlobImageInOnlyOffice } from "./OnlyOfficeBlobRegistry";
 import { SocketRegistry } from "@/infrastructure/socket/SocketRegistry";
 import { AsyncLock } from "@/shared/concurrency/AsyncLock";
 import { ImagePathNormalizer } from "@/shared/utils/ImagePathNormalizer";
@@ -15,6 +16,12 @@ type FakeSocketOptions = {
     token?: string;
     session?: string;
   };
+  /**
+   * socket 被实例化时所在的 window（通常是 OnlyOffice iframe 的 contentWindow）。
+   * 由 io 工厂注入时显式传入，用于访问 iframe 的 AscCommon（g_oDocumentBlobUrls 等）。
+   * 模块级 window 指向宿主页，无法访问 iframe 注册表。
+   */
+  hostWindow?: Window;
   query?: Record<string, string>;
   path?: string;
   transports?: string[];
@@ -127,10 +134,21 @@ export class FakeSocket {
   private sessionId = `local-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
   private userId = "local-user";
   private lockManager = new AsyncLock();
+  /**
+   * 记录 socket 被实例化时所在的 window（通常是 OnlyOffice iframe 的 contentWindow）。
+   * FakeSocket 模块本身定义在宿主页，模块内的自由变量 `window` 指向宿主页而非 iframe；
+   * 但 `g_oDocumentBlobUrls` 等注册表挂在 iframe 的 AscCommon 上。
+   * 因此凡是需要访问 iframe 上下文（如注入 blob 图片）的地方，都必须用这个 hostWindow，
+   * 而不是模块级的 window。
+   */
+  private hostWindow: Window;
 
   constructor(options?: FakeSocketOptions) {
     this.io = new FakeSocketManager(options);
     this.auth = options?.auth;
+    // 优先用显式传入的 hostWindow（iframe）；回退 globalThis（可能指向宿主，
+    // 仅作兜底，访问 iframe AscCommon 会失败）
+    this.hostWindow = options?.hostWindow ?? (globalThis as unknown as Window);
     // 注册到 WeakRef 注册表，使用临时 docId
     socketRegistry.register(`temp-${Date.now()}`, this);
     queueMicrotask(() => this.connect());
@@ -431,7 +449,7 @@ export class FakeSocket {
           const normalized = normalizeImagePath(name);
           const url = resolveImageUrl(images, name, normalized);
           if (!url && docId && isFetchableImageUrl(name)) {
-            const remote = await fetchAndRegisterRemoteImage(docId, name);
+            const remote = await fetchAndRegisterRemoteImage(this.hostWindow, docId, name);
             if (remote) {
               return remote.path === name
                 ? [remote]
@@ -631,7 +649,7 @@ function isFetchableImageUrl(value: string) {
   }
 }
 
-async function fetchAndRegisterRemoteImage(docId: string, imageUrl: string) {
+async function fetchAndRegisterRemoteImage(hostWindow: Window, docId: string, imageUrl: string) {
   try {
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -676,6 +694,12 @@ async function fetchAndRegisterRemoteImage(docId: string, imageUrl: string) {
       });
       return null;
     }
+
+    // 关键：同步把字节注入 OnlyOffice 的 blob URL 注册表，使 PDF 渲染序列化
+    // 时写出 inline base64（与工具栏上传图片走同一修复路径）。
+    // 注意：必须用 hostWindow（iframe），g_oDocumentBlobUrls 挂在 iframe 的 AscCommon 上，
+    // 模块级 window 指向宿主页，会找不到注册表导致注入静默失败。
+    registerBlobImageInOnlyOffice(hostWindow, objectUrl, bytes, contentType || mimeFromExtension(ext));
 
     return { path: imagePath, url: objectUrl };
   } catch (error) {

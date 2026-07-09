@@ -10,3 +10,5 @@ CLAUDE.md
 plugins/*.plugin
 .DS_Store
 .worktree/
+.zcode
+.zcode-backups

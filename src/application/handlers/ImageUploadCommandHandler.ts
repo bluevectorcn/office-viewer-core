@@ -1,4 +1,5 @@
 import { registerDocumentImageAsset } from '../../infrastructure/socket/AssetsStore';
+import { registerBlobImageInOnlyOffice } from '../../infrastructure/socket/OnlyOfficeBlobRegistry';
 import { createId } from '../../shared/utils/LifecycleHelpers';
 
 const UPLOAD_ENDPOINT_RE = /\/upload\/([^/?#]+)/i;
@@ -228,6 +229,12 @@ export async function handleImageUploadRequest(
     URL.revokeObjectURL(url);
     return null;
   }
+
+  // 关键：同步把字节注入 OnlyOffice 的 blob URL 注册表。
+  // PDF 导出走 renderer binary 路径，Metafile.drawImage 对 blob: URL 会调用
+  // g_oDocumentBlobUrls.getImageBase64；未注册则原样写入 blob: 字面量，
+  // 后端 x2t 无法解析 → 导出的 PDF 缺图。注入后序列化时写出 inline base64。
+  registerBlobImageInOnlyOffice(targetWindow, url, bytes, uploadBody.type);
 
   return {
     [imagePath]: url,
