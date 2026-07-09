@@ -38,11 +38,6 @@ const baseConfig: DocEditorConfig = createBaseConfig({
         spellcheck: false,
       },
       plugins: true,
-      // layout: {
-      //   toolbar: false,
-      //   leftMenu: false,
-      //   rightMenu: false
-      // },
     },
   },
 });

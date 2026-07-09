@@ -11,6 +11,22 @@ import {
   type ConvertedInput as LegacyConvertedInput
 } from '../services/InputProcessingService';
 
+const extensionToMime: Record<string, string> = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  odt: 'application/vnd.oasis.opendocument.text',
+  txt: 'text/plain',
+  rtf: 'application/rtf',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  csv: 'text/csv',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ppt: 'application/vnd.ms-powerpoint',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  pdf: 'application/pdf',
+};
+
 /**
  * 转换服务适配器
  *
@@ -23,10 +39,22 @@ export class ConversionServiceAdapter implements ConversionService {
     this.config = config;
   }
 
-  /**
-   * 准备输入（适配旧的 prepareInput）
-   */
   async prepareInput(input: EditorInput): Promise<UseCasePreparedInput> {
+    if (typeof input === 'string') {
+      const title = input.split('/').pop()?.split('?')[0] || 'document.docx';
+      const fileType = this.getFileType(title);
+      const mimeType = extensionToMime[fileType] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      
+      const fakeBlob = new Blob([], { type: mimeType });
+      (fakeBlob as any)._remoteUrl = input; // 携带原始远程 URL
+      (fakeBlob as any)._title = title;
+      
+      return {
+        file: fakeBlob,
+        title: title
+      };
+    }
+
     const legacy: LegacyPreparedInput = await legacyPrepareInput(input);
 
     // 适配返回类型
@@ -73,20 +101,36 @@ export class ConversionServiceAdapter implements ConversionService {
   }
 
   /**
-   * 使用 Go 后端服务进行文件转码和资源加载
+   * 使用 Go 后端服务进行 file 转码和资源加载
    */
   private async convertWithBackend(prepared: UseCasePreparedInput): Promise<ConvertedDocument> {
-    const file = prepared.file instanceof File
-      ? prepared.file
-      : new File([prepared.file], prepared.title || 'document.docx');
+    const remoteUrl = (prepared.file as any)._remoteUrl;
+    const formData = new FormData();
+    let fileName = prepared.title || 'document.docx';
+
+    if (remoteUrl) {
+      // 传递远程链接由后端抓取，解决 CORS 跨域问题
+      formData.append('url', remoteUrl);
+      formData.append('title', fileName);
+    } else {
+      const file = prepared.file instanceof File
+        ? prepared.file
+        : new File([prepared.file], fileName);
+      formData.append('file', file);
+      formData.append('title', file.name);
+      fileName = file.name;
+    }
 
     if (!this.config?.backendUrl) {
       throw new Error('后端转码服务未配置 backendUrl。请在编辑器配置中设置 backendUrl。');
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('title', file.name);
+    // 状态汇报：开始提报后端转码
+    window.dispatchEvent(new CustomEvent('office-viewer-status', {
+      detail: remoteUrl 
+        ? "正在连接服务器并拉取转换远程文档..." 
+        : "正在上传并转换本地文档..."
+    }));
 
     // 1. 发送 HTTP POST 请求至 Go 服务接口进行转换
     const response = await fetch(`${this.config.backendUrl}/api/convert`, {
@@ -104,6 +148,11 @@ export class ConversionServiceAdapter implements ConversionService {
       throw new Error(`服务器转码业务失败: ${result.error || '未知错误'}`);
     }
 
+    // 状态汇报：转码成功，拉取二进制中
+    window.dispatchEvent(new CustomEvent('office-viewer-status', {
+      detail: "文档转码成功，正在加载渲染缓存..."
+    }));
+
     // 2. 在前端拉取转换完成的 Editor.bin 并缓存为本地 Object URL，确保兼容性
     const binResponse = await fetch(result.editorBinUrl);
     if (!binResponse.ok) {
@@ -117,23 +166,34 @@ export class ConversionServiceAdapter implements ConversionService {
       url: result.editorBinUrl,
       objectUrl: objectUrl,
       title: prepared.title || 'document',
-      documentType: result.documentType || this.inferDocumentType(file.name),
-      fileType: result.fileType || this.getFileType(file.name),
+      documentType: result.documentType || this.inferDocumentType(fileName),
+      fileType: result.fileType || this.getFileType(fileName),
       images: result.images || {},
       mediaData: {} // 在后端模式下，图片直接远程加载，无需在前端内存中装载庞大的 mediaData，大幅节约内存
     };
   }
 
-  /**
-   * 纯前端本地 WASM 转换逻辑（封装原有的 convertWithX2T 逻辑）
-   */
   private async convertWithWasm(prepared: UseCasePreparedInput): Promise<ConvertedDocument> {
-    // 确保 prepared.file 是 File 类型
-    const file = prepared.file instanceof File
-      ? prepared.file
-      : new File([prepared.file], prepared.title || 'document.docx');
+    let file: File;
+    const remoteUrl = (prepared.file as any)._remoteUrl;
 
-    // 构造旧的 PreparedInput 格式
+    if (remoteUrl) {
+      // 只有当被迫以降级或纯前端 WASM 模式加载此远程 URL 时，前端这才开始真正的 fetch 下载
+      try {
+        const legacy: LegacyPreparedInput = await legacyPrepareInput(remoteUrl);
+        file = legacy.file instanceof File
+          ? legacy.file
+          : new File([legacy.file], legacy.title || 'document.docx');
+      } catch (err) {
+        throw new Error(`纯前端 WASM 模式下载远程文档失败: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else {
+      file = prepared.file instanceof File
+        ? prepared.file
+        : new File([prepared.file], prepared.title || 'document.docx');
+    }
+
+    // 构造旧 of PreparedInput 格式
     const legacyPrepared: LegacyPreparedInput = {
       file,
       title: prepared.title || 'document',

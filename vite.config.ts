@@ -113,6 +113,7 @@ const buildNo = versionParts.pop() || "1";
 const productVersion = versionParts.join(".");
 
 export default defineConfig({
+  base: "./",
   define: {
     __ONLYOFFICE_VERSION__: JSON.stringify(productVersion),
     __ONLYOFFICE_BUILD_NUMBER__: parseInt(buildNo, 10),
@@ -135,6 +136,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
+        app: path.resolve(__dirname, "app.html"),
         ...Object.fromEntries(
           globSync("playground/**/*.html").map((file: string) => [
             file.replace(/\.html$/, "").replace(/\//g, "_"),
