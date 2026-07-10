@@ -1,3 +1,14 @@
+# ─── 外挂字体版 Dockerfile ──────────────────────────────────────────────────
+#
+# 与默认 Dockerfile 的区别：
+#   - 镜像不内置任何字体（剥离 fonts/ 与 dist 中已生成的 web 字体）；
+#   - 不在构建期运行 allfontsgen，改由启动脚本 (docker-entrypoint.sh) 在容器
+#     启动时根据外挂字体目录动态生成 x2t 版与 web 版字体产物；
+#   - 容器需通过 volume 挂载字体：
+#       docker run -v $(pwd)/fonts:/app/assets/fonts <image>
+#
+# 详见 scripts/docker-entrypoint.sh。
+
 # Stage 1: Build Frontend
 FROM node:24-bookworm-slim AS frontend-builder
 WORKDIR /build
@@ -20,6 +31,16 @@ COPY vendor/ ./vendor/
 
 # 进行打包
 RUN pnpm build
+
+# [外挂字体] 在构建阶段即剥离 dist 中的内置 web 字体及其索引/缩略图产物。
+# 必须在此层删除：dist 是从本 stage COPY 进最终镜像的，构建层的内容不会进入最终镜像，
+# 才能真正减小镜像体积（若在最终镜像里 rm，删除标记所在的层不会缩小下层 COPY 的体积）。
+# 这些产物将在容器启动时由 docker-entrypoint.sh 根据外挂字体重新生成。
+RUN rm -rf /build/dist/vendor/onlyoffice/fonts && \
+    rm -f /build/dist/vendor/onlyoffice/sdkjs/common/AllFonts.js \
+          /build/dist/vendor/onlyoffice/sdkjs/common/AllFonts.js.br \
+          /build/dist/vendor/onlyoffice/sdkjs/common/font_selection.bin && \
+    find /build/dist/vendor/onlyoffice/sdkjs/common/Images -maxdepth 1 -name 'fonts_thumbnail*' -delete 2>/dev/null || true
 
 # Stage 2: Build the Go binary
 FROM golang:1.20-bookworm AS backend-builder
@@ -54,15 +75,20 @@ COPY --from=backend-builder /build/office-viewer-backend /app/office-viewer-back
 # 拷贝 x2t 工具链到 /app/bin (包含 bin 下原有的所有 so 库，包含 DoctRenderer.config 与 xregexp-all-min.js)
 COPY server-go/x2t/ /app/bin/
 
-# 拷贝外挂物理字体到 /app/assets/fonts/
-COPY fonts/ /app/assets/fonts/
+# [外挂字体] 不再 COPY fonts/ 到 /app/assets/fonts，该目录将由 volume 挂载提供。
+# 仅创建空目录作为默认挂载点，避免容器在未挂载字体时 allfontsgen 因路径不存在而报错。
+RUN mkdir -p /app/assets/fonts
 
-# 拷贝前端打包的 dist 目录
+# 拷贝前端打包的 dist 目录（字体已在 frontend-builder 阶段剥离，此处 COPY 的即是瘦身版）
 COPY --from=frontend-builder /build/dist /app/dist
 
 # 创建软链接，以使 DoctRenderer.config (配置为 ../sdkjs 和 ../dictionaries) 能够找到前端代码中对应的 sdkjs 资源
 RUN ln -s /app/dist/vendor/onlyoffice/sdkjs /app/sdkjs && \
     ln -s /app/dist/vendor/onlyoffice/dictionaries /app/dictionaries
+
+# 拷贝启动脚本（负责字体生成 + 服务启动）
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # 设置动态链接库路径，使 x2t 可以找到同目录下的 .so 依赖库
 ENV LD_LIBRARY_PATH=/app/bin
@@ -70,15 +96,8 @@ ENV X2T_PATH=/app/bin/x2t
 ENV TEMP_DIR=/app/temp
 ENV PORT=3000
 
-# [字体] 字体生成移至启动脚本：容器启动时由 docker-entrypoint.sh 根据字体目录
-# 重新生成 x2t 版与 web 版字体产物。这样既能复用内置字体（未挂载 volume 时，
-# /app/assets/fonts 即构建期 COPY 进来的内置字体），也能在挂载外挂字体时自动切换。
-# 拷贝启动脚本（负责字体生成 + 服务启动）
-COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
-
 # 暴露端口
 EXPOSE 3000
 
-# 启动：先由入口脚本生成字体产物，再 exec 后端
+# [外挂字体] 不再直接启动后端，先由入口脚本生成字体产物再 exec 后端
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
