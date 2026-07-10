@@ -30,9 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 COPY server-go/go.mod server-go/go.sum ./
 RUN go mod download
-COPY server-go/*.go ./
-COPY server-go/csvdetector/ ./csvdetector/
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend .
+COPY server-go/ ./
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend ./cmd/server/main.go
 
 # Stage 3: Final runtime environment
 FROM debian:bookworm-slim

@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"strings"
@@ -84,8 +84,7 @@ const (
 )
 
 // getAvsFormatFrom maps file extension to OnlyOffice AvsFileType integer
-func getAvsFormatFrom(ext string) int {
-	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+func GetAvsFormatFrom(ext string) int { normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
 	switch normalized {
 	// Word (Document)
 	case "docx":
@@ -158,11 +157,10 @@ func getAvsFormatFrom(ext string) int {
 	default:
 		return AVS_FILE_UNKNOWN
 	}
-}
+ }
 
 // getAvsFormatTo maps file extension to Canvas rendering format integer based on document classes
-func getAvsFormatTo(ext string) int {
-	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+func GetAvsFormatTo(ext string) int { normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
 	switch normalized {
 	// Word (Document)
 	case "docx", "doc", "odt", "rtf", "txt", "html", "htm", "mht", "epub", "fb2", "mobi", "docm", "dotx", "dotm":
@@ -183,11 +181,10 @@ func getAvsFormatTo(ext string) int {
 	default:
 		return AVS_FILE_CANVAS_WORD
 	}
-}
+ }
 
 // getAvsCanvasFormat maps documentType to OnlyOffice Canvas rendering format integer
-func getAvsCanvasFormat(docType string) int {
-	switch strings.ToLower(docType) {
+func GetAvsCanvasFormat(docType string) int { switch strings.ToLower(docType) {
 	case "cell":
 		return AVS_FILE_CANVAS_SPREADSHEET
 	case "slide":
@@ -199,4 +196,4 @@ func getAvsCanvasFormat(docType string) int {
 	default:
 		return AVS_FILE_CANVAS_WORD
 	}
-}
+ }

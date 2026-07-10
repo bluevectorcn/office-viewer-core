@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"office-viewer-backend/utils"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,8 +33,6 @@ var (
 	contextPath        = ""               // 统一的前端与 API 根路径前缀
 )
 
-// 任务锁，防止定时清理和转换任务冲突
-var mu sync.Mutex
 
 func init() {
 	// 初始化并发控制通道
@@ -197,7 +196,7 @@ func handleConvert(c *gin.Context) {
 		// 没有上传文件，检测是否是 URL 参数
 		fileUrl = c.PostForm("url")
 		if fileUrl == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing file or url in form-data"})
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Missing file or url in form-data", "details": ""})
 			return
 		}
 		title = c.PostForm("title")
@@ -223,11 +222,9 @@ func handleConvert(c *gin.Context) {
 	workDir := filepath.Join(tempDir, taskId)
 
 	// 2. 创建临时工作空间
-	mu.Lock()
 	err = os.MkdirAll(filepath.Join(workDir, "media"), 0755)
-	mu.Unlock()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task workspace"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create task workspace", "details": ""})
 		return
 	}
 
@@ -238,29 +235,29 @@ func handleConvert(c *gin.Context) {
 	if fileUrl != "" {
 		// 远程下载文件
 		log.Printf("[Task %s] Downloading remote file: %s\n", taskId, fileUrl)
-		downloadErr := downloadFile(fileUrl, tmpUploadPath)
+		downloadErr := utils.DownloadFile(fileUrl, tmpUploadPath, 500*1024*1024)
 		if downloadErr != nil {
 			log.Printf("[Task %s] Failed to download file from url: %v\n", taskId, downloadErr)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to download file from remote URL: %v", downloadErr)})
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to download file from remote URL: %v", downloadErr), "details": ""})
 			return
 		}
 	} else {
 		// 保存上传的原始文档文件
 		if err := c.SaveUploadedFile(file, tmpUploadPath); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to save uploaded file", "details": ""})
 			return
 		}
 	}
 
 	// 优先根据原文件名的后缀进行判定，若原文件名后缀是支持的有效格式，则绝不使用 magicmime 覆盖它
 	titleExt := filepath.Ext(title)
-	if titleExt != "" && isSupportedExtension(titleExt) {
+	if titleExt != "" && utils.IsSupportedExtension(titleExt) {
 		ext = titleExt
 		log.Printf("[Task %s] Using supported extension from title: %s\n", taskId, ext)
 	} else {
 		// 只有在原文件名无有效后缀时，才通过 magicmime 进行推导
 		if mimeType, err := magicmime.TypeByFile(tmpUploadPath); err == nil {
-			ext = mimeToExt(mimeType)
+			ext = utils.MimeToExt(mimeType)
 			log.Printf("[Task %s] Detected MIME type: %s, mapped extension: %s\n", taskId, mimeType, ext)
 		}
 		if ext == "" && titleExt != "" {
@@ -276,7 +273,7 @@ func handleConvert(c *gin.Context) {
 
 	// 重命名临时文件到正确的输入路径
 	if err := os.Rename(tmpUploadPath, inputFilePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename uploaded file to target extension"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to rename uploaded file to target extension", "details": ""})
 		return
 	}
 
@@ -300,7 +297,7 @@ func handleConvert(c *gin.Context) {
 		absThemeDir = themeDir
 	}
 
-	formatFrom := strconv.Itoa(getAvsFormatFrom(ext))
+	formatFrom := strconv.Itoa(utils.GetAvsFormatFrom(ext))
 	formatTo := strconv.Itoa(getAvsFormatTo(ext))
 
 	var csvNodes string
@@ -342,7 +339,7 @@ func handleConvert(c *gin.Context) {
 		}
 
 		log.Printf("[Task %s] CSV Parameters - Encoding CodePage: %d, Delimiter: %d, Char: %q\n", taskId, csvEncoding, csvDelimiter, csvDelimiterChar)
-		mappedEncoding := mapCodePageToIndex(csvEncoding)
+		mappedEncoding := utils.MapCodePageToIndex(csvEncoding)
 		escapedChar := html.EscapeString(csvDelimiterChar)
 		csvNodes = fmt.Sprintf("\n  <m_nCsvTxtEncoding>%d</m_nCsvTxtEncoding>\n  <m_nCsvDelimiter>%d</m_nCsvDelimiter>\n  <m_nCsvDelimiterChar>%s</m_nCsvDelimiterChar>", mappedEncoding, csvDelimiter, escapedChar)
 	}
@@ -370,7 +367,7 @@ func handleConvert(c *gin.Context) {
 
 	log.Printf("[Task %s] Generated params.xml content:\n%s\n", taskId, paramsContent)
 	if err := os.WriteFile(paramsPath, []byte(paramsContent), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate parameters file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to generate parameters file", "details": ""})
 		return
 	}
 
@@ -381,7 +378,7 @@ func handleConvert(c *gin.Context) {
 		defer func() { <-sem }()
 	case <-time.After(60 * time.Second):
 		// 排队等待超时，返回 429 忙碌
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Server is busy. Queue wait timed out."})
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "Server is busy. Queue wait timed out.", "details": ""})
 		return
 	}
 
@@ -391,10 +388,7 @@ func handleConvert(c *gin.Context) {
 	outputBytes, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[Task %s] x2t error: %v, output: %s\n", taskId, err, string(outputBytes))
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   fmt.Sprintf("x2t conversion failed: %v", err),
-			"details": string(outputBytes),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("x2t conversion failed: %v", err), "details": string(outputBytes)})
 		return
 	}
 	log.Printf("[Task %s] Conversion completed successfully. x2t output: %s\n", taskId, string(outputBytes))
@@ -425,68 +419,14 @@ func handleConvert(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"taskId":       taskId,
-		"documentType": inferDocumentType(inputFileName),
+		"documentType": utils.InferDocumentType(inputFileName),
 		"fileType":     strings.TrimPrefix(ext, "."),
 		"editorBinUrl": fmt.Sprintf("%s://%s%s/static/%s/Editor.bin", scheme, host, contextPath, taskId),
 		"images":       images,
 	})
 }
 
-// mimeToExt 将 MIME 类型映射为已知的文件后缀名
-func mimeToExt(mimeType string) string {
-	parts := strings.Split(mimeType, ";")
-	mime := strings.TrimSpace(strings.ToLower(parts[0]))
 
-	switch mime {
-	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		return ".docx"
-	case "application/msword":
-		return ".doc"
-	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-		return ".xlsx"
-	case "application/vnd.ms-excel":
-		return ".xls"
-	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-		return ".pptx"
-	case "application/vnd.ms-powerpoint":
-		return ".ppt"
-	case "application/pdf":
-		return ".pdf"
-	case "application/vnd.oasis.opendocument.text":
-		return ".odt"
-	case "application/vnd.oasis.opendocument.spreadsheet":
-		return ".ods"
-	case "application/vnd.oasis.opendocument.presentation":
-		return ".odp"
-	case "text/csv":
-		return ".csv"
-	case "text/plain":
-		return ".txt"
-	case "text/rtf", "application/rtf":
-		return ".rtf"
-	case "application/epub+zip":
-		return ".epub"
-	default:
-		return ""
-	}
-}
-
-// inferDocumentType 推断文档大类
-func inferDocumentType(filename string) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".docx", ".doc", ".odt", ".txt", ".rtf":
-		return "word"
-	case ".xlsx", ".xls", ".ods", ".csv":
-		return "cell"
-	case ".pptx", ".ppt", ".odp":
-		return "slide"
-	case ".pdf":
-		return "pdf"
-	default:
-		return "word"
-	}
-}
 
 // startCleanupTimer 定时清理机制，定期清理过期转换目录
 func startCleanupTimer(interval time.Duration) {
@@ -512,9 +452,7 @@ func startCleanupTimer(interval time.Duration) {
 
 				// 检查最后修改时间，超过 threshold 阈值即删除
 				if now.Sub(info.ModTime()) > cleanupThreshold {
-					mu.Lock()
 					err = os.RemoveAll(dirPath)
-					mu.Unlock()
 					if err != nil {
 						log.Printf("Failed to remove expired dir %s: %v\n", dirPath, err)
 					} else {
@@ -548,7 +486,7 @@ func startCleanupTimer(interval time.Duration) {
 func handleExportPdf(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing file in form-data"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Missing file in form-data", "details": ""})
 		return
 	}
 
@@ -561,18 +499,16 @@ func handleExportPdf(c *gin.Context) {
 	// 分配任务 ID 与工作目录
 	taskId := uuid.New().String()
 	workDir := filepath.Join(tempDir, taskId)
-	mu.Lock()
 	err = os.MkdirAll(workDir, 0755)
-	mu.Unlock()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task workspace"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create task workspace", "details": ""})
 		return
 	}
 
 	// 保存上传文件
 	uploadPath := filepath.Join(workDir, "input.bin")
 	if err := c.SaveUploadedFile(file, uploadPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to save uploaded file", "details": ""})
 		return
 	}
 
@@ -601,9 +537,7 @@ func handleExportPdf(c *gin.Context) {
 
 					targetPath := filepath.Join(workDir, cleanRelPath)
 					parentDir := filepath.Dir(targetPath)
-					mu.Lock()
 					mkdirErr := os.MkdirAll(parentDir, 0755)
-					mu.Unlock()
 					if mkdirErr != nil {
 						log.Printf("[Task %s] Failed to create media subdirectory %s: %v\n", taskId, parentDir, mkdirErr)
 						continue
@@ -631,16 +565,16 @@ func handleExportPdf(c *gin.Context) {
 		if documentType == "" {
 			documentType = "word"
 		}
-		formatFromVal = getAvsCanvasFormat(documentType)
+		formatFromVal = utils.GetAvsCanvasFormat(documentType)
 	} else {
-		formatFromVal = getAvsFormatFrom(uploadExt)
-		if formatFromVal == AVS_FILE_UNKNOWN {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported source extension: %s", uploadExt)})
+		formatFromVal = utils.GetAvsFormatFrom(uploadExt)
+		if formatFromVal == utils.AVS_FILE_UNKNOWN {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("Unsupported source extension: %s", uploadExt), "details": ""})
 			return
 		}
 	}
 
-	formatToVal := AVS_FILE_CROSSPLATFORM_PDF
+	formatToVal := utils.AVS_FILE_CROSSPLATFORM_PDF
 
 	formatFrom := strconv.Itoa(formatFromVal)
 	formatTo := strconv.Itoa(formatToVal)
@@ -673,7 +607,7 @@ func handleExportPdf(c *gin.Context) {
 </TaskQueueDataConvert>`, absFontDir, absThemeDir, uploadPath, outputPath, formatFrom, formatTo)
 
 	if err := os.WriteFile(paramsPath, []byte(paramsContent), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate parameters file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to generate parameters file", "details": ""})
 		return
 	}
 
@@ -682,7 +616,7 @@ func handleExportPdf(c *gin.Context) {
 	case sem <- struct{}{}:
 		defer func() { <-sem }()
 	case <-time.After(60 * time.Second):
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Server is busy. Queue wait timed out."})
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "Server is busy. Queue wait timed out.", "details": ""})
 		return
 	}
 
@@ -692,26 +626,20 @@ func handleExportPdf(c *gin.Context) {
 	outputBytes, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[Task %s] x2t error: %v, output: %s\n", taskId, err, string(outputBytes))
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   fmt.Sprintf("x2t conversion failed: %v", err),
-			"details": string(outputBytes),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("x2t conversion failed: %v", err), "details": string(outputBytes)})
 		return
 	}
 
 	// 读取生成的 PDF
 	pdfBytes, err := os.ReadFile(outputPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "x2t produced no PDF output", "details": string(outputBytes)})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "x2t produced no PDF output", "details": string(outputBytes)})
 		return
 	}
 
 	// 校验是否是合法 PDF
 	if len(pdfBytes) < 5 || pdfBytes[0] != 0x25 || pdfBytes[1] != 0x50 {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "x2t output is not a valid PDF",
-			"details": fmt.Sprintf("header=% x, size=%d", pdfBytes[:min(8, len(pdfBytes))], len(pdfBytes)),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "x2t output is not a valid PDF", "details": fmt.Sprintf("header=% x, size=%d", pdfBytes[:min(8, len(pdfBytes))], len(pdfBytes))})
 		return
 	}
 
@@ -730,54 +658,5 @@ func min(a, b int) int {
 	return b
 }
 
-// downloadFile 从指定的 URL 下载远程文件，后端拉取可规避浏览器跨域 CORS 拦截限制
-func downloadFile(url string, destPath string) error {
-	client := &http.Client{
-		Timeout: 45 * time.Second,
-	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad remote server status code: %d", resp.StatusCode)
-	}
 
-	out, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
-
-// isSupportedExtension 检查后缀是否为 OnlyOffice 支持 of 已知格式
-func isSupportedExtension(ext string) bool {
-	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
-	supported := map[string]bool{
-		"docx": true, "doc": true, "odt": true, "txt": true, "rtf": true,
-		"xlsx": true, "xls": true, "ods": true, "csv": true,
-		"pptx": true, "ppt": true, "odp": true, "pdf": true,
-	}
-	return supported[normalized]
-}
-
-// mapCodePageToIndex 映射 Windows CodePage 到 OnlyOffice 内部的编码 Index 标识
-func mapCodePageToIndex(codepage int) int {
-	switch codepage {
-	case 65001:
-		return 46 // UTF-8
-	case 936:
-		return 18 // GBK
-	case 1200:
-		return 48 // UTF-16LE
-	case 1201:
-		return 49 // UTF-16BE
-	default:
-		return 46 // Default to UTF-8
-	}
-}
