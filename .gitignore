@@ -12,3 +12,5 @@ plugins/*.plugin
 .worktree/
 .zcode
 .zcode-backups
+example_comma
+example_comma.csv

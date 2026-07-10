@@ -278,6 +278,68 @@ const onReady = (editor) => {
 
 所有组件均通过 Ref 或回调暴露 `IEditor` 接口，支持 `open`, `newFile`, `save`, `export` 等操作。
 
+## Docker 部署
+
+项目提供两种镜像，覆盖"开箱即用"与"外挂字体最小镜像"两种场景。镜像同时承载 Go 后端（负责 PDF 转换）与前端预览资源，启动时由入口脚本统一生成 x2t 与 web 端所需的字体产物。
+
+> **架构限制**：内置的 `x2t` 为 x86-64 原生二进制，镜像仅支持 `linux/amd64`。
+
+| 镜像 | Dockerfile | 字体 | 适用场景 |
+| :--- | :--- | :--- | :--- |
+| `office-viewer:latest` | `Dockerfile` | 内置（开箱即用） | 默认部署，也支持运行时挂载外挂字体覆盖 |
+| `office-viewer:slim` | `Dockerfile.fonts` | 不含（剥离） | 镜像最小，**必须**挂载外挂字体才能使用转换/预览 |
+
+### 构建镜像
+
+使用 `scripts/docker-build.sh` 统一构建：
+
+```bash
+# 构建内置字体镜像（开箱即用）
+./scripts/docker-build.sh full
+
+# 构建外挂字体瘦身镜像
+./scripts/docker-build.sh slim
+
+# 一次构建两种
+./scripts/docker-build.sh all
+
+# 指定镜像名/标签，或推送到远端仓库
+./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
+PUSH=1 ./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
+```
+
+环境变量：
+
+| 变量 | 默认 | 说明 |
+| :--- | :--- | :--- |
+| `PLATFORM` | `linux/amd64` | 构建平台（x2t 仅支持 amd64） |
+| `NO_CACHE` | `0` | 设为 `1` 禁用构建缓存 |
+| `PUSH` | `0` | 设为 `1` 构建后推送镜像 |
+
+### 运行
+
+**内置字体镜像**（开箱即用，无需额外配置）：
+
+```bash
+docker run -d -p 3000:3000 office-viewer:latest
+```
+
+**外挂字体**（两种镜像均支持，挂载到 `/app/assets/fonts` 即可覆盖字体源）：
+
+```bash
+docker run -d -p 3000:3000 \
+  -v /path/to/your/fonts:/app/assets/fonts \
+  office-viewer:slim
+```
+
+字体目录中放置 `.ttf` / `.otf` 文件即可。容器启动时 `docker-entrypoint.sh` 会自动生成 x2t 与 web 端所需的全部字体产物（`AllFonts.js`、`font_selection.bin`、字体分片、缩略图）。
+
+### 字体工作机制
+
+- **服务端（PDF 转换）**：x2t 从 `/app/assets/fonts` 读取物理字体，并加载同目录的 `AllFonts.js` 与 `font_selection.bin`（路径由 `server-go/x2t/DoctRenderer.config` 指定）。
+- **前端（页面预览）**：浏览器从 `dist/vendor/onlyoffice/` 下加载 web 版字体与 `AllFonts.js`。
+- **启动脚本**根据 `FONTS_DIR`（默认 `/app/assets/fonts`）一次性生成上述所有产物并分发到对应目录。
+
 ## 开发者脚本
 
 - `pnpm dev`: 启动 Vite 开发服务器。
@@ -287,6 +349,7 @@ const onReady = (editor) => {
 - `pnpm test`: 运行单元测试 (Vitest)。
 - `pnpm lint`: 代码质量检查。
 - `pnpm type-check`: TypeScript 类型检查。
+- `./scripts/docker-build.sh <full|slim|all>`: 构建 Docker 镜像（详见 [Docker 部署](#docker-部署)）。
 
 
 ## 详细配置参考
