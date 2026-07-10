@@ -14,3 +14,4 @@ plugins/*.plugin
 .zcode-backups
 example_comma
 example_comma.csv
+docs

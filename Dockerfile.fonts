@@ -38,8 +38,8 @@ RUN pnpm build
 # 这些产物将在容器启动时由 docker-entrypoint.sh 根据外挂字体重新生成。
 RUN rm -rf /build/dist/vendor/onlyoffice/fonts && \
     rm -f /build/dist/vendor/onlyoffice/sdkjs/common/AllFonts.js \
-          /build/dist/vendor/onlyoffice/sdkjs/common/AllFonts.js.br \
-          /build/dist/vendor/onlyoffice/sdkjs/common/font_selection.bin && \
+    /build/dist/vendor/onlyoffice/sdkjs/common/AllFonts.js.br \
+    /build/dist/vendor/onlyoffice/sdkjs/common/font_selection.bin && \
     find /build/dist/vendor/onlyoffice/sdkjs/common/Images -maxdepth 1 -name 'fonts_thumbnail*' -delete 2>/dev/null || true
 
 # Stage 2: Build the Go binary
@@ -51,9 +51,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 COPY server-go/go.mod server-go/go.sum ./
 RUN go mod download
-COPY server-go/*.go ./
-COPY server-go/csvdetector/ ./csvdetector/
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend .
+COPY server-go/ ./
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o office-viewer-backend ./cmd/server
 
 # Stage 3: Final runtime environment
 FROM debian:bookworm-slim
