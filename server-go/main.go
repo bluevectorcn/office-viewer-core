@@ -3,13 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	"log"
 	"net/http"
 	"office-viewer-backend/service"
 	"office-viewer-backend/utils"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/rakyll/magicmime"
 
-	"office-viewer-backend/csvdetector"
 )
 
 // 并发队列配置
