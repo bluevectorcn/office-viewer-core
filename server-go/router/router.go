@@ -26,6 +26,8 @@ func SetupRouter(cfg *config.AppConfig, docCtrl *controller.DocumentController) 
 		baseGroup = r
 	}
 
+	// 静态文件服务，托管转换产物（Editor.bin 以及 media 目录下的图片）
+	baseGroup.Static("/static", cfg.TempDir)
 	baseGroup.POST("/api/convert", docCtrl.HandleConvert)
 	baseGroup.POST("/api/export-pdf", docCtrl.HandleExportPdf)
 
