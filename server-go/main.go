@@ -4,16 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"log"
 	"net/http"
+	"office-viewer-backend/utils"
 	"os"
 	"os/exec"
-	"office-viewer-backend/utils"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +30,6 @@ var (
 	cleanupThreshold   = 30 * time.Minute // 转换文件保留时间，到期自动清理
 	contextPath        = ""               // 统一的前端与 API 根路径前缀
 )
-
 
 func init() {
 	// 初始化并发控制通道
@@ -298,7 +295,7 @@ func handleConvert(c *gin.Context) {
 	}
 
 	formatFrom := strconv.Itoa(utils.GetAvsFormatFrom(ext))
-	formatTo := strconv.Itoa(getAvsFormatTo(ext))
+	formatTo := strconv.Itoa(utils.GetAvsFormatTo(ext))
 
 	var csvNodes string
 	if ext == ".csv" {
@@ -425,8 +422,6 @@ func handleConvert(c *gin.Context) {
 		"images":       images,
 	})
 }
-
-
 
 // startCleanupTimer 定时清理机制，定期清理过期转换目录
 func startCleanupTimer(interval time.Duration) {
@@ -657,6 +652,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-
-
-

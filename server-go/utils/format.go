@@ -62,17 +62,17 @@ const (
 	AVS_FILE_SPREADSHEET_SCSV         = AVS_FILE_SPREADSHEET + 0x0024
 
 	// Crossplatform Class
-	AVS_FILE_CROSSPLATFORM             = 0x0200
-	AVS_FILE_CROSSPLATFORM_PDF         = AVS_FILE_CROSSPLATFORM + 0x0001
-	AVS_FILE_CROSSPLATFORM_SWF         = AVS_FILE_CROSSPLATFORM + 0x0002
-	AVS_FILE_CROSSPLATFORM_DJVU        = AVS_FILE_CROSSPLATFORM + 0x0003
-	AVS_FILE_CROSSPLATFORM_XPS         = AVS_FILE_CROSSPLATFORM + 0x0004
-	AVS_FILE_CROSSPLATFORM_SVG         = AVS_FILE_CROSSPLATFORM + 0x0005
-	AVS_FILE_CROSSPLATFORM_HTMLR       = AVS_FILE_CROSSPLATFORM + 0x0006
-	AVS_FILE_CROSSPLATFORM_HTMLR_MENU  = AVS_FILE_CROSSPLATFORM + 0x0007
-	AVS_FILE_CROSSPLATFORM_HTMLR_CANVAS= AVS_FILE_CROSSPLATFORM + 0x0008
-	AVS_FILE_CROSSPLATFORM_PDFA        = AVS_FILE_CROSSPLATFORM + 0x0009
-	AVS_FILE_CROSSPLATFORM_OFD         = AVS_FILE_CROSSPLATFORM + 0x000a
+	AVS_FILE_CROSSPLATFORM              = 0x0200
+	AVS_FILE_CROSSPLATFORM_PDF          = AVS_FILE_CROSSPLATFORM + 0x0001
+	AVS_FILE_CROSSPLATFORM_SWF          = AVS_FILE_CROSSPLATFORM + 0x0002
+	AVS_FILE_CROSSPLATFORM_DJVU         = AVS_FILE_CROSSPLATFORM + 0x0003
+	AVS_FILE_CROSSPLATFORM_XPS          = AVS_FILE_CROSSPLATFORM + 0x0004
+	AVS_FILE_CROSSPLATFORM_SVG          = AVS_FILE_CROSSPLATFORM + 0x0005
+	AVS_FILE_CROSSPLATFORM_HTMLR        = AVS_FILE_CROSSPLATFORM + 0x0006
+	AVS_FILE_CROSSPLATFORM_HTMLR_MENU   = AVS_FILE_CROSSPLATFORM + 0x0007
+	AVS_FILE_CROSSPLATFORM_HTMLR_CANVAS = AVS_FILE_CROSSPLATFORM + 0x0008
+	AVS_FILE_CROSSPLATFORM_PDFA         = AVS_FILE_CROSSPLATFORM + 0x0009
+	AVS_FILE_CROSSPLATFORM_OFD          = AVS_FILE_CROSSPLATFORM + 0x000a
 
 	// Canvas Class
 	AVS_FILE_CANVAS              = 0x2000
@@ -84,7 +84,8 @@ const (
 )
 
 // getAvsFormatFrom maps file extension to OnlyOffice AvsFileType integer
-func GetAvsFormatFrom(ext string) int { normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+func GetAvsFormatFrom(ext string) int {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
 	switch normalized {
 	// Word (Document)
 	case "docx":
@@ -157,10 +158,11 @@ func GetAvsFormatFrom(ext string) int { normalized := strings.ToLower(strings.Tr
 	default:
 		return AVS_FILE_UNKNOWN
 	}
- }
+}
 
 // getAvsFormatTo maps file extension to Canvas rendering format integer based on document classes
-func GetAvsFormatTo(ext string) int { normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
+func GetAvsFormatTo(ext string) int {
+	normalized := strings.ToLower(strings.TrimPrefix(ext, "."))
 	switch normalized {
 	// Word (Document)
 	case "docx", "doc", "odt", "rtf", "txt", "html", "htm", "mht", "epub", "fb2", "mobi", "docm", "dotx", "dotm":
@@ -181,10 +183,11 @@ func GetAvsFormatTo(ext string) int { normalized := strings.ToLower(strings.Trim
 	default:
 		return AVS_FILE_CANVAS_WORD
 	}
- }
+}
 
 // getAvsCanvasFormat maps documentType to OnlyOffice Canvas rendering format integer
-func GetAvsCanvasFormat(docType string) int { switch strings.ToLower(docType) {
+func GetAvsCanvasFormat(docType string) int {
+	switch strings.ToLower(docType) {
 	case "cell":
 		return AVS_FILE_CANVAS_SPREADSHEET
 	case "slide":
@@ -196,4 +199,4 @@ func GetAvsCanvasFormat(docType string) int { switch strings.ToLower(docType) {
 	default:
 		return AVS_FILE_CANVAS_WORD
 	}
- }
+}

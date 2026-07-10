@@ -11,9 +11,9 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv("PORT", "8080")
 	os.Setenv("MAX_CONCURRENT_TASKS", "10")
 	os.Setenv("TEMP_DIR", "./test_temp")
-	
+
 	cfg := LoadConfig()
-	
+
 	if cfg.Port != "8080" {
 		t.Errorf("Expected port 8080, got %s", cfg.Port)
 	}
