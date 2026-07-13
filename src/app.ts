@@ -76,6 +76,7 @@ const baseConfig: DocEditorConfig = createBaseConfig({
 const urlParams = new URLSearchParams(window.location.search);
 const fileUrl = urlParams.get('file');
 const fpStr = urlParams.get('fp');
+const titleStr = urlParams.get('title');
 
 const isPreview = pathname.endsWith('/preview');
 const isEdit = pathname.endsWith('/edit');
@@ -121,8 +122,13 @@ if (baseConfig.editorConfig) {
 if (fp == 1) {
   baseConfig.type = 'embedded';
 }
+if (titleStr && baseConfig.document) {
+  baseConfig.document.title = titleStr;
+}
 
 console.log(
+  'title',
+  titleStr,
   'fullConfig',
   baseConfig,
   '[OfficeViewerApp] fileUrl:',

@@ -198,7 +198,7 @@ export function buildEditorConfig(
     url: resolved.url,
     directUrl: resolved.url,
     fileType: resolved.fileType,
-    title: resolved.title,
+    title: restBaseConfig.document?.title ?? resolved.title,
     key: docKey,
     isForm: restBaseConfig.document?.isForm ?? (resolved.fileType === "pdf" ? false : undefined),
   };
