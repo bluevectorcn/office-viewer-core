@@ -15,3 +15,4 @@ plugins/*.plugin
 example_comma
 example_comma.csv
 docs
+.superpowers
