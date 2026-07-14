@@ -278,10 +278,10 @@ const onReady = (editor) => {
 
 > **架构限制**：内置的 `x2t` 为 x86-64 原生二进制，镜像仅支持 `linux/amd64`。
 
-| 镜像                   | Dockerfile         | 字体             | 适用场景                                        |
-| :--------------------- | :----------------- | :--------------- | :---------------------------------------------- |
-| `office-viewer:latest` | `Dockerfile`       | 内置（开箱即用） | 默认部署，也支持运行时挂载外挂字体覆盖          |
-| `office-viewer:slim`   | `Dockerfile.fonts` | 不含（剥离）     | 镜像最小，**必须**挂载外挂字体才能使用转换/预览 |
+| 镜像                        | Dockerfile         | 字体             | 适用场景                                        |
+| :-------------------------- | :----------------- | :--------------- | :---------------------------------------------- |
+| `office-viewer-core:latest` | `Dockerfile`       | 内置（开箱即用） | 默认部署，也支持运行时挂载外挂字体覆盖          |
+| `office-viewer-core:slim`   | `Dockerfile.fonts` | 不含（剥离）     | 镜像最小，**必须**挂载外挂字体才能使用转换/预览 |
 
 ### 构建镜像
 
@@ -298,8 +298,8 @@ const onReady = (editor) => {
 ./scripts/docker-build.sh all
 
 # 指定镜像名/标签，或推送到远端仓库
-./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
-PUSH=1 ./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
+./scripts/docker-build.sh full ghcr.io/bluevectorcn/office-viewer-core:latest
+PUSH=1 ./scripts/docker-build.sh full ghcr.io/bluevectorcn/office-viewer-core:latest
 ```
 
 环境变量：
@@ -315,7 +315,7 @@ PUSH=1 ./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
 **内置字体镜像**（开箱即用，无需额外配置）：
 
 ```bash
-docker run -d -p 3000:3000 office-viewer:latest
+docker run -d -p 3000:3000 ghcr.io/bluevectorcn/office-viewer-core:latest
 ```
 
 **外挂字体**（两种镜像均支持，挂载到 `/app/assets/fonts` 即可覆盖字体源）：
@@ -323,7 +323,7 @@ docker run -d -p 3000:3000 office-viewer:latest
 ```bash
 docker run -d -p 3000:3000 \
   -v /path/to/your/fonts:/app/assets/fonts \
-  office-viewer:slim
+  ghcr.io/bluevectorcn/office-viewer-core:slim
 ```
 
 字体目录中放置 `.ttf` / `.otf` 文件即可。容器启动时 `docker-entrypoint.sh` 会自动生成 x2t 与 web 端所需的全部字体产物（`AllFonts.js`、`font_selection.bin`、字体分片、缩略图）。
