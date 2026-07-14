@@ -32,17 +32,11 @@ cd office-viewer-core
 pnpm install
 ```
 
-
 #### 1.1 添加字体
 
 将您的字体文件（.ttf, .otf）放入项目根目录下的 `fonts/` 目录中。
 
-#### 1.2 添加 wasm
-
-- 下载x2t：[这里](https://github.com/cryptpad/onlyoffice-x2t-wasm/releases) (建议使用7.3的版本), 也可自行基于 [onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) 进行编译
-- 拷贝 x2t.js 和 x2t.wasm 到项目根目录 `wasm/x2t` 下。
-
-#### 1.3 添加插件 (可选)
+#### 1.2 添加插件 (可选)
 
 1. 从 [ONLYOFFICE/onlyoffice.github.io Releases](https://github.com/ONLYOFFICE/onlyoffice.github.io/releases) 下载所需的 `*.plugin` 文件
 2. 将下载的 `.plugin` 文件拷贝到项目根目录的 `plugins/` 目录下
@@ -103,21 +97,21 @@ src/
 ### 创建编辑器
 
 ```typescript
-import { createEditor } from "./application/EditorFactory";
-import { createBaseConfig } from "./application/config/EditorConfigBuilder";
+import { createEditor } from './application/EditorFactory';
+import { createBaseConfig } from './application/config/EditorConfigBuilder';
 
-const container = document.getElementById("editor-container");
+const container = document.getElementById('editor-container');
 
 // 1. 创建基础配置
 const config = createBaseConfig({
-  assetsPrefix: "/vendor/onlyoffice", // 静态资源路径
+  assetsPrefix: '/vendor/onlyoffice', // 静态资源路径
   editorConfig: {
-    lang: "zh",
+    lang: 'zh',
     customization: {
       about: false,
       // ... 更多自定义配置
-    }
-  }
+    },
+  },
 });
 
 // 2. 初始化编辑器
@@ -131,13 +125,13 @@ await editor.open(fileBlob);
 
 `createEditor` 返回一个实现了 `IEditor` 接口的对象：
 
-| 方法 | 描述 |
-| :--- | :--- |
-| `open(input)` | 打开文档，支持 `File`, `Blob`, `ArrayBuffer` 或远程 `URL` |
-| `newFile(format)` | 创建并打开新文件，支持 `'docx'`, `'xlsx'`, `'pptx'` |
+| 方法              | 描述                                                             |
+| :---------------- | :--------------------------------------------------------------- |
+| `open(input)`     | 打开文档，支持 `File`, `Blob`, `ArrayBuffer` 或远程 `URL`        |
+| `newFile(format)` | 创建并打开新文件，支持 `'docx'`, `'xlsx'`, `'pptx'`              |
 | `save(filename?)` | 将当前内容保存，返回 `Promise<{ blob: Blob, filename: string }>` |
-| `export(format)` | 导出到特定格式，支持 `'pdf'`, `'docx'`, `'xlsx'`, `'pptx'` |
-| `destroy()` | 销毁编辑器实例，清理内存并移除 DOM 元素 |
+| `export(format)`  | 导出到特定格式，支持 `'pdf'`, `'docx'`, `'xlsx'`, `'pptx'`       |
+| `destroy()`       | 销毁编辑器实例，清理内存并移除 DOM 元素                          |
 
 ## 静态部署指南
 
@@ -152,11 +146,11 @@ server {
 
     location /vendor/onlyoffice/ {
         alias /path/to/office-viewer-core/vendor/onlyoffice/;
-        
+
         # 必须：开启跨域隔离
         add_header Cross-Origin-Opener-Policy same-origin;
         add_header Cross-Origin-Embedder-Policy require-corp;
-        
+
         # 允许跨域请求
         add_header Access-Control-Allow-Origin *;
     }
@@ -202,10 +196,10 @@ npm install office-viewer-core
   const viewer = document.getElementById('viewer');
   const config = createBaseConfig({
     // 指向您部署的静态资源路径
-    assetsPrefix: '/vendor/onlyoffice', 
-    editorConfig: { lang: 'zh' }
+    assetsPrefix: '/vendor/onlyoffice',
+    editorConfig: { lang: 'zh' },
   });
-  
+
   viewer.init(config).then(() => {
     viewer.newFile('docx');
   });
@@ -224,17 +218,17 @@ import 'office-viewer-core/dist-lib/style.css';
 function App() {
   const config = createBaseConfig({
     assetsPrefix: '/vendor/onlyoffice',
-    editorConfig: { lang: 'zh' }
+    editorConfig: { lang: 'zh' },
   });
 
   return (
     <div style={{ height: '800px', width: '100%' }}>
-      <OnlyOfficeViewer 
-        config={config} 
+      <OnlyOfficeViewer
+        config={config}
         onEditorReady={(editor) => {
           console.log('编辑器已就绪', editor);
           editor.newFile('docx');
-        }} 
+        }}
       />
     </div>
   );
@@ -257,7 +251,7 @@ import 'office-viewer-core/dist-lib/style.css';
 
 const config = createBaseConfig({
   assetsPrefix: '/vendor/onlyoffice',
-  editorConfig: { lang: 'zh' }
+  editorConfig: { lang: 'zh' },
 });
 
 const onReady = (editor) => {
@@ -284,10 +278,10 @@ const onReady = (editor) => {
 
 > **架构限制**：内置的 `x2t` 为 x86-64 原生二进制，镜像仅支持 `linux/amd64`。
 
-| 镜像 | Dockerfile | 字体 | 适用场景 |
-| :--- | :--- | :--- | :--- |
-| `office-viewer:latest` | `Dockerfile` | 内置（开箱即用） | 默认部署，也支持运行时挂载外挂字体覆盖 |
-| `office-viewer:slim` | `Dockerfile.fonts` | 不含（剥离） | 镜像最小，**必须**挂载外挂字体才能使用转换/预览 |
+| 镜像                   | Dockerfile         | 字体             | 适用场景                                        |
+| :--------------------- | :----------------- | :--------------- | :---------------------------------------------- |
+| `office-viewer:latest` | `Dockerfile`       | 内置（开箱即用） | 默认部署，也支持运行时挂载外挂字体覆盖          |
+| `office-viewer:slim`   | `Dockerfile.fonts` | 不含（剥离）     | 镜像最小，**必须**挂载外挂字体才能使用转换/预览 |
 
 ### 构建镜像
 
@@ -310,11 +304,11 @@ PUSH=1 ./scripts/docker-build.sh full ghcr.io/your-org/office-viewer:v1.0
 
 环境变量：
 
-| 变量 | 默认 | 说明 |
-| :--- | :--- | :--- |
+| 变量       | 默认          | 说明                         |
+| :--------- | :------------ | :--------------------------- |
 | `PLATFORM` | `linux/amd64` | 构建平台（x2t 仅支持 amd64） |
-| `NO_CACHE` | `0` | 设为 `1` 禁用构建缓存 |
-| `PUSH` | `0` | 设为 `1` 构建后推送镜像 |
+| `NO_CACHE` | `0`           | 设为 `1` 禁用构建缓存        |
+| `PUSH`     | `0`           | 设为 `1` 构建后推送镜像      |
 
 ### 运行
 
@@ -351,7 +345,6 @@ docker run -d -p 3000:3000 \
 - `pnpm type-check`: TypeScript 类型检查。
 - `./scripts/docker-build.sh <full|slim|all>`: 构建 Docker 镜像（详见 [Docker 部署](#docker-部署)）。
 
-
 ## 详细配置参考
 
 配置系统基于 `DocEditorConfig`，主要包含以下部分：
@@ -367,6 +360,7 @@ docker run -d -p 3000:3000 \
 只有优秀的开源项目才让 `office-viewer-core` 成为可能：
 
 - [cryptpad/onlyoffice-x2t-wasm](https://github.com/cryptpad/onlyoffice-x2t-wasm) (x2t.wasm)
+- [ONLYOFFICE/core](https://github.com/ONLYOFFICE/core)
 - [ONLYOFFICE/sdkjs](https://github.com/ONLYOFFICE/sdkjs)
 - [ONLYOFFICE/web-apps](https://github.com/ONLYOFFICE/web-apps)
 - [ONLYOFFICE/dictionaries](https://github.com/ONLYOFFICE/dictionaries)
