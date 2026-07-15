@@ -63,8 +63,30 @@ export class GitOperations {
     const relativePath = path.relative(this.rootDir, repoDir);
 
     // 检查是否已在该 tag
+    let alreadyAtTag = false;
     const currentTag = this.getCurrentTag(repoDir);
     if (currentTag === tag) {
+      alreadyAtTag = true;
+    } else {
+      // 比较 commit hash (解决多个 tag 指向同一个 commit 时 git describe 返回的 tag 不匹配的问题)
+      const headHashResult = spawnSync("git", ["rev-parse", "HEAD"], {
+        cwd: repoDir,
+        encoding: "utf-8",
+      });
+      const tagHashResult = spawnSync("git", ["rev-parse", `${tag}^{commit}`], {
+        cwd: repoDir,
+        encoding: "utf-8",
+      });
+      if (
+        headHashResult.status === 0 &&
+        tagHashResult.status === 0 &&
+        headHashResult.stdout.trim() === tagHashResult.stdout.trim()
+      ) {
+        alreadyAtTag = true;
+      }
+    }
+
+    if (alreadyAtTag) {
       logger.info(`${relativePath} 已在 ${tag}`);
       return true;
     }
