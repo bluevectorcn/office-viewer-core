@@ -194,6 +194,25 @@ async function main(): Promise<number> {
       compressAssets(config.paths.vendor);
       progress.endStep();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 11: 生成版本信息文件 (用于同步版本给 FakeSocket)
+    // ─────────────────────────────────────────────────────────────────────────
+    logger.info("生成版本信息文件 (version.json)...");
+    const versionInfoPath = path.join(config.paths.vendor, "version.json");
+    fs.writeFileSync(
+      versionInfoPath,
+      JSON.stringify(
+        {
+          version: config.version.full,
+          product: config.version.product,
+          build: config.version.build,
+        },
+        null,
+        2
+      )
+    );
+    logger.success(`版本信息已保存至: ${versionInfoPath}`);
   } catch (error) {
     success = false;
     if (error instanceof Error) {

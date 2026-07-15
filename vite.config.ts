@@ -105,12 +105,29 @@ function staticCopyPlugin() {
 import react from "@vitejs/plugin-react";
 import vue from "@vitejs/plugin-vue";
 
-const pkgPath = path.join(rootDir, "package.json");
-const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-const fullVersion = pkg.onlyoffice?.version || "9.3.0.1";
-const versionParts = fullVersion.split(".");
-const buildNo = versionParts.pop() || "1";
-const productVersion = versionParts.join(".");
+const versionJsonPath = path.join(rootDir, "vendor/onlyoffice/version.json");
+let productVersion = "9.3.0";
+let buildNo = "1";
+
+if (fs.existsSync(versionJsonPath)) {
+  try {
+    const versionInfo = JSON.parse(fs.readFileSync(versionJsonPath, "utf-8"));
+    productVersion = versionInfo.product;
+    buildNo = String(versionInfo.build);
+  } catch (e) {
+    // fallback to package.json below
+  }
+}
+
+if (!fs.existsSync(versionJsonPath)) {
+  const pkgPath = path.join(rootDir, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+  const fullVersion = pkg.onlyoffice?.version || "9.3.0.1";
+  const versionParts = fullVersion.split(".");
+  buildNo = versionParts.pop() || "1";
+  productVersion = versionParts.join(".");
+}
+
 
 export default defineConfig({
   base: "./",
