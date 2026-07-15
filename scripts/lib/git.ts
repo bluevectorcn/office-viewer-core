@@ -93,8 +93,8 @@ export class GitOperations {
 
     logger.info(`更新 ${relativePath} 到 ${tag}...`);
 
-    // 获取 tag
-    spawnSync("git", ["fetch", "--tags", "--depth", "1", "origin", tag], {
+    // 获取 tag (避免使用 --tags 拉取所有标签，只拉取目标 tag)
+    spawnSync("git", ["fetch", "--depth", "1", "origin", `refs/tags/${tag}:refs/tags/${tag}`], {
       cwd: repoDir,
     });
 
