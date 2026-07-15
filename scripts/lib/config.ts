@@ -16,7 +16,7 @@ const defaultOptions: BuildOptions = {
   quiet: false,
   debug: false,
   syncOnly: false,
-  packageManager: "pnpm",
+  packageManager: "npm",
   help: false,
 };
 
@@ -97,6 +97,10 @@ export function parseArgs(args: string[]): Partial<BuildOptions> {
           throw new Error(`Invalid package manager: ${pm}. Use npm, pnpm, or yarn.`);
         }
         break;
+      case "--onlyoffice-version":
+      case "--ov":
+        options.onlyofficeVersion = args[++i];
+        break;
       case "--help":
       case "-h":
         options.help = true;
@@ -104,6 +108,8 @@ export function parseArgs(args: string[]): Partial<BuildOptions> {
       default:
         if (arg.startsWith("-")) {
           logger.warn(`Unknown option: ${arg}`);
+        } else {
+          options.onlyofficeVersion = arg;
         }
     }
   }
@@ -118,9 +124,10 @@ export function showHelp(): void {
   console.log(`
 OnlyOffice 构建脚本
 
-用法: pnpm build:onlyoffice [选项]
+用法: pnpm build:onlyoffice [选项] [版本号]
 
 选项:
+  --onlyoffice-version, --ov <version> 指定 onlyoffice 的版本
   --skip-fonts, --no-fonts     跳过字体处理
   --skip-compress, --no-compress 跳过 Brotli 压缩
   --skip-wasm, --no-wasm       跳过 WASM 文件复制
@@ -131,10 +138,11 @@ OnlyOffice 构建脚本
   -h, --help                   显示此帮助信息
 
 示例:
-  pnpm build:onlyoffice                    # 完整构建
+  pnpm build:onlyoffice                    # 使用 package.json 中的默认版本完整构建
+  pnpm build:onlyoffice 9.4.0.131          # 传入版本参数构建指定版本
+  pnpm build:onlyoffice --ov 9.4.0.131     # 使用命令行选项指定版本
   pnpm build:onlyoffice --skip-fonts       # 跳过字体处理
   pnpm build:onlyoffice --sync-only        # 只同步仓库
-  pnpm build:onlyoffice --pm npm --quiet   # 使用 npm，静默模式
 `);
 }
 
@@ -151,9 +159,10 @@ export function loadConfig(rootDir: string, cliOptions: Partial<BuildOptions> = 
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
   const ooConfig: OnlyOfficeConfig = pkg.onlyoffice || {};
 
-  // 验证必需配置
-  if (!ooConfig.version) {
-    throw new Error("Missing onlyoffice.version in package.json");
+  // 验证与获取版本号
+  const versionStr = (cliOptions.onlyofficeVersion && cliOptions.onlyofficeVersion.trim()) || ooConfig.version;
+  if (!versionStr) {
+    throw new Error("Missing onlyoffice.version in package.json and no version provided in command line");
   }
 
   // 合并选项
@@ -168,7 +177,7 @@ export function loadConfig(rootDir: string, cliOptions: Partial<BuildOptions> = 
   }
 
   // 解析版本
-  const version = parseVersion(ooConfig.version);
+  const version = parseVersion(versionStr);
 
   // 构建路径
   const submoduleBase = path.join(rootDir, "submodules", "onlyoffice");

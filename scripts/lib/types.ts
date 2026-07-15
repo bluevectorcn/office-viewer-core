@@ -37,6 +37,8 @@ export interface BuildOptions {
   packageManager: "npm" | "pnpm" | "yarn";
   /** 显示帮助 */
   help: boolean;
+  /** 指定 onlyoffice 的版本，如果未指定则使用 package.json 的 */
+  onlyofficeVersion?: string;
 }
 
 /** 版本信息 */

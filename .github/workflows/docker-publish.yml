@@ -8,6 +8,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      onlyoffice_version:
+        description: 'OnlyOffice version (e.g. 9.4.0.131)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -51,7 +56,13 @@ jobs:
         run: pnpm install
 
       - name: Build OnlyOffice (generate vendor)
-        run: pnpm build:onlyoffice
+        run: |
+          VERSION="${{ github.event.inputs.onlyoffice_version }}"
+          if [ -n "$VERSION" ]; then
+            pnpm build:onlyoffice "$VERSION"
+          else
+            pnpm build:onlyoffice
+          fi
         env:
           NODE_OPTIONS: "--openssl-legacy-provider"
 
