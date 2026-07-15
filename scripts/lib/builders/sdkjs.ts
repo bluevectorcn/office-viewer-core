@@ -37,20 +37,30 @@ export class SdkjsBuilder {
       return false;
     }
 
-    // 安装依赖
-    logger.info("安装 SDKJS 依赖...");
-    const installResult = this.executor.npm("npm", ["install"], buildDir);
-    if (!installResult.success) {
-      logger.error("SDKJS 依赖安装失败");
-      return false;
-    }
+    const pythonScript = path.join(buildDir, "build.py");
+    if (fs.existsSync(pythonScript)) {
+      logger.info("检测到 build.py，使用 Python 构建 SDKJS...");
+      const buildResult = this.executor.python(["build.py"], buildDir);
+      if (!buildResult.success) {
+        logger.error("SDKJS Python 构建失败");
+        return false;
+      }
+    } else {
+      // 安装依赖
+      logger.info("安装 SDKJS 依赖...");
+      const installResult = this.executor.npm("npm", ["install"], buildDir);
+      if (!installResult.success) {
+        logger.error("SDKJS 依赖安装失败");
+        return false;
+      }
 
-    // 执行 grunt 构建
-    logger.info("构建 SDKJS...");
-    const buildResult = this.executor.npx(["grunt"], buildDir);
-    if (!buildResult.success) {
-      logger.error("SDKJS 构建失败");
-      return false;
+      // 执行 grunt 构建
+      logger.info("构建 SDKJS (Legacy Grunt)...");
+      const buildResult = this.executor.npx(["grunt"], buildDir);
+      if (!buildResult.success) {
+        logger.error("SDKJS 构建失败");
+        return false;
+      }
     }
 
     logger.success("SDKJS 构建完成");

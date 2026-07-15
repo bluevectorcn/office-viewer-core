@@ -139,4 +139,28 @@ export class Executor {
   npx(args: string[], cwd: string): ExecResult {
     return this.run("npx", args, cwd, { injectBuildEnv: true });
   }
+
+  /**
+   * 执行 python 命令
+   */
+  python(args: string[], cwd: string): ExecResult {
+    const pythonCmd = this.detectPython();
+    return this.run(pythonCmd, args, cwd, { injectBuildEnv: true });
+  }
+
+  /**
+   * 探测系统中的 python3 或 python
+   */
+  private detectPython(): string {
+    try {
+      const result = spawnSync("python3", ["--version"]);
+      if (result.status === 0) {
+        return "python3";
+      }
+    } catch {
+      // ignore
+    }
+    return "python";
+  }
 }
+
