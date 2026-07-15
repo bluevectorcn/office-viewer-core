@@ -7,6 +7,11 @@ on:
         description: 'OnlyOffice version (e.g. 9.4.0.131)'
         required: false
         default: ''
+      compress:
+        description: 'Compress assets (Brotli)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -45,12 +50,15 @@ jobs:
 
       - name: Build OnlyOffice
         run: |
+          ARGS=""
           VERSION="${{ github.event.inputs.onlyoffice_version }}"
           if [ -n "$VERSION" ]; then
-            pnpm build:onlyoffice "$VERSION"
-          else
-            pnpm build:onlyoffice
+            ARGS="$ARGS $VERSION"
           fi
+          if [ "${{ github.event.inputs.compress }}" != "true" ]; then
+            ARGS="$ARGS --skip-compress"
+          fi
+          pnpm build:onlyoffice $ARGS
         env:
           NODE_OPTIONS: "--openssl-legacy-provider"
 

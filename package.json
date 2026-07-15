@@ -8,7 +8,7 @@
   },
   "type": "module",
   "onlyoffice": {
-    "version": "9.3.0.83",
+    "version": "9.4.0.131",
     "submodule": "submodules/onlyoffice/web-apps",
     "sdkjsSubmodule": "submodules/onlyoffice/sdkjs"
   },
