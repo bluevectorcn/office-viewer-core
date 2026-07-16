@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY src/ ./src/
 COPY public/ ./public/
 COPY playground/ ./playground/
-COPY tsconfig.json vite.config.ts eslint.config.js index.html app.html ./
+COPY tsconfig.json vite.config.ts eslint.config.js index.html demo.html app.html ./
 COPY vendor/ ./vendor/
 
 # 进行打包
