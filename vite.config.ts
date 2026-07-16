@@ -152,13 +152,17 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        // 根目录 index.html 加载 React 版 playground，作为默认首页
         main: path.resolve(__dirname, "index.html"),
+        // 原纯 JS demo，现作为独立入口 demo.html 访问
+        demo: path.resolve(__dirname, "demo.html"),
         app: path.resolve(__dirname, "app.html"),
         ...Object.fromEntries(
-          globSync("playground/**/*.html").map((file: string) => [
-            file.replace(/\.html$/, "").replace(/\//g, "_"),
-            path.resolve(__dirname, file),
-          ])
+          globSync("playground/**/*.html")
+            .map((file: string) => [
+              file.replace(/\.html$/, "").replace(/\//g, "_"),
+              path.resolve(__dirname, file),
+            ])
         ),
       },
     },

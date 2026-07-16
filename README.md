@@ -9,7 +9,7 @@
 - **全能编辑**：支持 DOCX, XLSX, PPTX 的在线编辑，以及多格式（PDF, DOCX 等）的导出。
 - **灵活部署**：支持自定义静态资源前缀（`assetsPrefix`），适配各种 CDN 和静态服务器布局。
 - **自定义字体支持**：支持通过 Docker 自动生成并集成自定义字体。
-- **在线预览**：[https://office.851621.xyz/playground/app/index.html](https://office.851621.xyz/playground/app/index.html)
+- **在线预览**：[https://office.851621.xyz/](https://office.851621.xyz/)
 
 ## 环境要求
 

@@ -119,6 +119,37 @@ function buildFreshFilename(label: string, ext: string): string {
   return `${label}-${Date.now().toString().slice(-6)}.${ext}`;
 }
 
+function resolveContextPath(): string {
+  const pathname = window.location.pathname;
+  // 推断当前页面所在的部署子路径（contextPath）。
+  // 例如部署在 /viewer/ 下时，pathname 通常为 /viewer/ 或 /viewer/index.html，期望得到 /viewer。
+  let dirPath = pathname;
+  const lastSlash = pathname.lastIndexOf('/');
+  // 若尾部是具体文件名（如 index.html），取其所在目录
+  if (lastSlash >= 0 && !pathname.endsWith('/')) {
+    dirPath = pathname.slice(0, lastSlash);
+  }
+  // 统一去掉末尾斜杠
+  dirPath = dirPath.replace(/\/+$/, '');
+
+  // 根目录视为无 contextPath
+  if (dirPath === '' || dirPath === '/') {
+    return '';
+  }
+  return dirPath;
+}
+
+function resolveDefaultBackendUrl(): string {
+  const contextPath = resolveContextPath();
+  if (!contextPath) {
+    // 开发态或根目录部署，默认指向本地后端
+    return 'http://localhost:3000';
+  }
+  // 部署在子路径下时，默认后端转换服务与前端同源，并携带 contextPath
+  // （对应 server-go 的 CONTEXT_PATH 路由分组：{contextPath}/api/convert 等）
+  return `${window.location.origin}${contextPath}`;
+}
+
 function getFilenameFromUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -277,7 +308,8 @@ function App() {
     return (localStorage.getItem('playground_transcode_mode') as any) || 'wasm';
   });
   const [backendUrl, setBackendUrl] = useState(() => {
-    return localStorage.getItem('playground_backend_url') || 'http://localhost:3000';
+    // 仅在用户未手动配置过时使用根据 contextPath 推断的默认值
+    return localStorage.getItem('playground_backend_url') || resolveDefaultBackendUrl();
   });
 
   useEffect(() => {
