@@ -28,3 +28,26 @@ func TestDownloadFile_SizeLimit(t *testing.T) {
 		t.Fatalf("Expected success, got: %v", err)
 	}
 }
+
+func TestDownloadFile_SelfSignedHTTPS(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello self signed tls"))
+	}))
+	defer ts.Close()
+
+	dest := "test_tls_download.bin"
+	defer os.Remove(dest)
+
+	err := DownloadFile(ts.URL, dest, 1024)
+	if err != nil {
+		t.Fatalf("Expected success for self-signed TLS, got error: %v", err)
+	}
+
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("Failed to read downloaded file: %v", err)
+	}
+	if string(data) != "hello self signed tls" {
+		t.Fatalf("Unexpected file content: %s", string(data))
+	}
+}

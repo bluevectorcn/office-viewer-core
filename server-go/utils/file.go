@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +11,14 @@ import (
 )
 
 func DownloadFile(url string, destPath string, maxSize int64) error {
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: 45 * time.Second,
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return err
