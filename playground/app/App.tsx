@@ -603,7 +603,13 @@ function App() {
           return;
         }
 
-        const input = activeDoc.file ?? activeDoc.blob;
+        const input =
+          activeDoc.file ??
+          (activeDoc.blob
+            ? new File([activeDoc.blob], activeDoc.name || 'document.docx', {
+                type: activeDoc.blob.type || 'application/octet-stream',
+              })
+            : null);
         if (input) {
           await editor.open(input);
         }

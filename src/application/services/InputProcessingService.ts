@@ -1,5 +1,6 @@
 import type { EditorInput } from "../../shared/types/EditorTypes";
 import { convertToEditorBin } from "../../infrastructure/conversion/X2TService";
+import { sniffFormatFromBytes } from "../../shared/utils/FileFormatSniffer";
 
 export interface PreparedInput {
   file: File;
@@ -96,16 +97,13 @@ export async function prepareInput(input: EditorInput): Promise<PreparedInput> {
   }
 
   if (input instanceof Blob) {
-    const fileType = inferExtensionFromMime(input.type);
-    if (!fileType) {
-      throw new Error(`Unsupported blob MIME type: ${input.type || "(empty)"}`);
-    }
-    const documentType = inferDocumentType(fileType);
-    if (!documentType) {
-      throw new Error(`Unsupported file type: ${fileType}`);
-    }
+    const buffer = await input.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const mimeExt = inferExtensionFromMime(input.type);
+    const fileType = sniffFormatFromBytes(bytes, mimeExt || "docx");
+    const documentType = inferDocumentType(fileType) ?? "word";
     const title = `document.${fileType}`;
-    const file = new File([input], title, { type: input.type || defaultDocxMime });
+    const file = new File([bytes], title, { type: input.type || defaultDocxMime });
     return { file, title, fileType, documentType };
   }
 

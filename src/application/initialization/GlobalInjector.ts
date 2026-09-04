@@ -96,6 +96,67 @@ function installButtonPatch(targetWindow: Window) {
   patch();
 }
 
+function installSaveWithPartsPatch(targetWindow: Window) {
+  let attempts = 0;
+  const patch = () => {
+    attempts++;
+    const win = targetWindow as Window & {
+      AscCommon?: {
+        saveWithParts?: {
+          (
+            fSendCommand: unknown,
+            fCallback: unknown,
+            fCallbackRequest: unknown,
+            oAdditionalData: unknown,
+            dataContainer: unknown
+          ): void;
+          __patched?: boolean;
+        };
+      };
+    };
+
+    const AscCommon = win.AscCommon;
+    if (AscCommon && typeof AscCommon.saveWithParts === "function") {
+      if (AscCommon.saveWithParts.__patched) return;
+
+      const originalSaveWithParts = AscCommon.saveWithParts;
+      const patchedSaveWithParts = function (
+        this: unknown,
+        fSendCommand: unknown,
+        fCallback: unknown,
+        fCallbackRequest: unknown,
+        oAdditionalData: unknown,
+        dataContainer: unknown
+      ) {
+        // 如果未传入 fCallbackRequest（例如 DownloadAs/outputurls 请求中 options.callback 为 undefined），
+        // 构造一个包装回调，确保在成功完成时调用 fCallback（即 api.fCurCallback），
+        // 避免成功响应被静默吞掉导致遮罩一直处于“正在下载文件”且无法进入后续对比合并。
+        const effectiveCallbackRequest =
+          fCallbackRequest ||
+          function fallbackCallbackRequest(incomeObject: unknown, status: unknown) {
+            if (typeof fCallback === "function") {
+              (fCallback as (incomeObject: unknown, status: unknown) => void)(incomeObject, status);
+            }
+          };
+
+        return originalSaveWithParts.call(
+          this,
+          fSendCommand,
+          fCallback,
+          effectiveCallbackRequest,
+          oAdditionalData,
+          dataContainer
+        );
+      };
+      patchedSaveWithParts.__patched = true;
+      AscCommon.saveWithParts = patchedSaveWithParts;
+    } else if (attempts < 200) {
+      setTimeout(patch, 50);
+    }
+  };
+  patch();
+}
+
 export function injectGlobals(targetWindow: Window = window) {
   if (injectedWindows.has(targetWindow)) return;
   if (targetWindow === window) {
@@ -104,6 +165,7 @@ export function injectGlobals(targetWindow: Window = window) {
 
   installLocalEndpointPatch(targetWindow);
   installButtonPatch(targetWindow);
+  installSaveWithPartsPatch(targetWindow);
 
   const globalWindow = targetWindow as typeof window & {
     io?: (options?: unknown) => FakeSocket;

@@ -896,6 +896,54 @@ export function getAvsFileTypeByExtension(extension: string): AvsFileType {
   }
 }
 
+export function getAvsCanvasFormat(extensionOrDocType: string): AvsFileType {
+  const normalized = extensionOrDocType.toLowerCase().replace(/^\./, '');
+  switch (normalized) {
+    case 'cell':
+    case 'xlsx':
+    case 'xls':
+    case 'ods':
+    case 'csv':
+    case 'xlsm':
+    case 'xltx':
+    case 'xltm':
+    case 'xlsb':
+      return AvsFileType.AVS_FILE_CANVAS_SPREADSHEET;
+
+    case 'slide':
+    case 'pptx':
+    case 'ppt':
+    case 'odp':
+    case 'ppsx':
+    case 'pptm':
+    case 'ppsm':
+    case 'potx':
+    case 'potm':
+      return AvsFileType.AVS_FILE_CANVAS_PRESENTATION;
+
+    case 'pdf':
+      return AvsFileType.AVS_FILE_CANVAS_PDF;
+
+    case 'word':
+    case 'docx':
+    case 'doc':
+    case 'odt':
+    case 'rtf':
+    case 'txt':
+    case 'html':
+    case 'htm':
+    case 'mht':
+    case 'epub':
+    case 'fb2':
+    case 'mobi':
+    case 'docm':
+    case 'dotx':
+    case 'dotm':
+    default:
+      return AvsFileType.AVS_FILE_CANVAS_WORD;
+  }
+}
+
 declare global {
   interface Window {
     DocsAPI?: {

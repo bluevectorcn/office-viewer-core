@@ -217,7 +217,7 @@ export class ConversionServiceAdapter implements ConversionService {
     // 构造旧 of PreparedInput 格式
     const legacyPrepared: LegacyPreparedInput = {
       file,
-      title: prepared.title || 'document',
+      title: prepared.title || file.name || 'document.docx',
       fileType: this.getFileType(file.name),
       documentType: this.inferDocumentType(file.name),
       csvOptions

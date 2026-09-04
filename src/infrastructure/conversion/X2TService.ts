@@ -1,5 +1,6 @@
 import type { ExportFormat, DocumentType } from "../../shared/types/EditorTypes";
-import { AvsFileType, getAvsFileTypeByExtension } from "../../shared/types/EditorTypes";
+import { AvsFileType, getAvsFileTypeByExtension, getAvsCanvasFormat } from "../../shared/types/EditorTypes";
+import { sniffFormatFromBytes } from "../../shared/utils/FileFormatSniffer";
 import { resolveAssetPath } from "../socket/AssetsPrefix";
 
 export interface X2TModule {
@@ -316,6 +317,17 @@ function buildParamsXml(fileFrom: string, fileTo: string, options?: ParamsXmlOpt
     `<m_nCsvTxtEncoding>${encoding}</m_nCsvTxtEncoding>`,
     `<m_nCsvDelimiter>${delimiter}</m_nCsvDelimiter>`,
     `<m_nCsvDelimiterChar>${delimiterChar}</m_nCsvDelimiterChar>`,
+    "<m_oInputLimits>",
+    '  <m_oInputLimit type="docx;dotx;docm;dotm">',
+    '    <m_oZip uncompressed="52428800" template="*.xml" />',
+    '  </m_oInputLimit>',
+    '  <m_oInputLimit type="xlsx;xltx;xlsm;xltm">',
+    '    <m_oZip uncompressed="302428800" template="*.xml" />',
+    '  </m_oInputLimit>',
+    '  <m_oInputLimit type="pptx;ppsx;potx;pptm;ppsm;potm">',
+    '    <m_oZip uncompressed="52428800" template="*.xml" />',
+    '  </m_oInputLimit>',
+    "</m_oInputLimits>",
     "</TaskQueueDataConvert>",
   ].join("");
 }
@@ -426,14 +438,18 @@ export async function convertToEditorBin(
 
   prepareWorkingDir(FS);
 
-  const sourceExt = getExtensionFromName(title) ?? inferExtensionFromMime(input.type) ?? "docx";
+  const rawExt = getExtensionFromName(title) ?? inferExtensionFromMime(input.type) ?? "docx";
+  const arrayBuffer = await input.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+
+  // 1. 结合文件魔数与扩展名智能嗅探真实格式，防止被错误重命名或无扩展名导致解析失败
+  const sourceExt = sniffFormatFromBytes(bytes, rawExt);
+
   // Some legacy formats (notably .doc) appear sensitive to complex filenames.
   const workingSourceName = sourceExt === "doc" ? "doc.doc" : `document.${sourceExt}`;
   const sourcePath = `${WORKING_ROOT}/${workingSourceName}`;
-  // const formatFrom = getAvsFileTypeByExtension(sourceExt);
-  // const formatToCanvas = getAvsFileTypeByExtension(sourceExt);
-  const arrayBuffer = await input.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
+  const formatFrom = getAvsFileTypeByExtension(sourceExt);
+  const formatToCanvas = getAvsCanvasFormat(sourceExt);
   FS.writeFile(sourcePath, bytes);
 
   // Office-website bypasses x2t for PDFs and feeds the bytes directly as Editor.bin.
@@ -441,12 +457,18 @@ export async function convertToEditorBin(
     FS.writeFile(EDITOR_BIN_PATH, bytes);
   } else if (sourceExt === "doc") {
     // 1) doc -> docx
-    const docToDocxParams = buildParamsXml(sourcePath, DOC_VIA_PATH);
+    const docToDocxParams = buildParamsXml(sourcePath, DOC_VIA_PATH, {
+      formatFrom: AvsFileType.AVS_FILE_DOCUMENT_DOC,
+      formatTo: AvsFileType.AVS_FILE_DOCUMENT_DOCX,
+    });
     FS.writeFile(PARAMS_PATH, docToDocxParams);
     const viaCode = runX2TCode(runtime, PARAMS_PATH);
 
     // 2) docx -> Editor.bin
-    const docxToBinParams = buildParamsXml(DOC_VIA_PATH, EDITOR_BIN_PATH);
+    const docxToBinParams = buildParamsXml(DOC_VIA_PATH, EDITOR_BIN_PATH, {
+      formatFrom: AvsFileType.AVS_FILE_DOCUMENT_DOCX,
+      formatTo: AvsFileType.AVS_FILE_CANVAS_WORD,
+    });
     FS.writeFile(PARAMS_PATH, docxToBinParams);
     const hasViaDocx = pathExists(FS, DOC_VIA_PATH);
     const finalCode = hasViaDocx ? runX2TCode(runtime, PARAMS_PATH) : null;
@@ -465,19 +487,19 @@ export async function convertToEditorBin(
       });
     }
   } else {
-    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH, { csvOptions });
+    const paramsXml = buildParamsXml(sourcePath, EDITOR_BIN_PATH, {
+      formatFrom,
+      formatTo: formatToCanvas,
+      csvOptions,
+    });
     FS.writeFile(PARAMS_PATH, paramsXml);
-    if (sourceExt === "csv") {
-      const code = runX2TCode(runtime, PARAMS_PATH);
-      const hasEditorBin = pathExists(FS, EDITOR_BIN_PATH);
-      if (!hasEditorBin) {
-        throw new Error(`x2t csv conversion did not produce Editor.bin (code ${code})`);
-      }
-      if (code !== 0) {
-        console.warn("x2t csv conversion returned non-zero code but produced Editor.bin", { code });
-      }
-    } else {
-      runX2T(runtime, PARAMS_PATH);
+    const code = runX2TCode(runtime, PARAMS_PATH);
+    const hasEditorBin = pathExists(FS, EDITOR_BIN_PATH);
+    if (!hasEditorBin) {
+      throw new Error(`x2t conversion failed with code ${code} for format ${sourceExt} (size: ${bytes.length} bytes)`);
+    }
+    if (code !== 0) {
+      console.warn(`x2t conversion returned non-zero code ${code} for format ${sourceExt} but produced Editor.bin`);
     }
   }
 

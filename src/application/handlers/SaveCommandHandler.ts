@@ -1,7 +1,13 @@
 import { emitServerMessage } from "../../infrastructure/socket/FakeSocket";
+import { registerBlobImageInOnlyOffice } from "../../infrastructure/socket/OnlyOfficeBlobRegistry";
 import { createId } from "../../shared/utils/LifecycleHelpers";
 import { type ExportFormat, getFileExtensionByType } from "../../shared/types/EditorTypes";
-import { exportWithX2T, exportPdfViaBackend, initX2TModule } from "../../infrastructure/conversion/X2TService";
+import {
+  exportWithX2T,
+  exportPdfViaBackend,
+  initX2TModule,
+  convertToEditorBin,
+} from "../../infrastructure/conversion/X2TService";
 import { getDocumentAssets, registerDownloadUrl } from "../../infrastructure/socket/AssetsStore";
 import { ChunkedUploader } from "@/infrastructure/network/ChunkedUploader";
 import { Logger } from "@/shared/logging/Logger";
@@ -499,6 +505,186 @@ async function finalizeSave(
   }
 }
 
+function guessImageMime(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "application/octet-stream";
+}
+
+function looksLikeDoc(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0
+  );
+}
+
+function inferFormatFromBytes(bytes: Uint8Array, defaultExt = "docx"): string {
+  if (looksLikeZip(bytes)) return "docx";
+  if (looksLikeDoc(bytes)) return "doc";
+  if (
+    bytes.byteLength >= 5 &&
+    bytes[0] === 0x7b &&
+    bytes[1] === 0x5c &&
+    bytes[2] === 0x72 &&
+    bytes[3] === 0x74 &&
+    bytes[4] === 0x66
+  ) {
+    return "rtf";
+  }
+  return defaultExt;
+}
+
+async function finalizeOutputUrls(
+  targetWindow: Window,
+  docId: string,
+  cmd: SaveCommand,
+  bytes: Uint8Array
+): Promise<SaveResponse | null> {
+  try {
+    let fileBytes = bytes;
+    let format = typeof cmd.format === "string" ? cmd.format.toLowerCase().replace(/^\./, "") : "";
+
+    // 如果二进制为空但传入了 url（来自 URL 或来自存储），通过 fetch 下载
+    if ((!fileBytes || fileBytes.byteLength === 0) && typeof cmd.url === "string" && cmd.url) {
+      debugLog("finalizeOutputUrls: fetching remote document url", { url: cmd.url });
+      const resp = await fetch(cmd.url);
+      if (!resp.ok) {
+        throw new Error(`Failed to fetch document from url: ${cmd.url} (${resp.status})`);
+      }
+      const arrayBuf = await resp.arrayBuffer();
+      fileBytes = new Uint8Array(arrayBuf);
+      if (!format) {
+        format = getExtension(cmd.url) ?? "";
+      }
+    }
+
+    if (!fileBytes || fileBytes.byteLength === 0) {
+      throw new Error("finalizeOutputUrls: empty document data");
+    }
+
+    if (!format) {
+      format =
+        (typeof cmd.filetype === "string" && cmd.filetype.toLowerCase().replace(/^\./, "")) ||
+        inferFormatFromBytes(fileBytes) ||
+        "docx";
+    }
+
+    const fileName =
+      (typeof cmd.title === "string" && cmd.title) || `compare_${Date.now()}.${format}`;
+    const file = new File([toOwnedUint8Array(fileBytes)], fileName, {
+      type: "application/octet-stream",
+    });
+
+    const { mode, backendUrl } = resolveBackendConfig(targetWindow);
+    let outputBinUrl = "";
+    let imagesMap: Record<string, string> = {};
+    let mediaDataMap: Record<string, Uint8Array> | undefined;
+
+    // 1. 若配置了后端转码模式且存在 backendUrl，尝试走 Go 后端服务转码
+    if (backendUrl && (mode === "server" || mode === "auto")) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("title", fileName);
+        const resp = await fetch(`${backendUrl}/api/convert`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!resp.ok) {
+          throw new Error(`Backend convert failed with status: ${resp.status}`);
+        }
+        const json = await resp.json();
+        if (!json.success || !json.editorBinUrl) {
+          throw new Error(`Backend convert error: ${json.error || "missing editorBinUrl"}`);
+        }
+        const binResp = await fetch(json.editorBinUrl);
+        if (!binResp.ok) {
+          throw new Error(`Failed to fetch backend editorBinUrl: ${binResp.status}`);
+        }
+        const binBlob = await binResp.blob();
+        outputBinUrl = URL.createObjectURL(binBlob);
+        imagesMap = json.images || {};
+      } catch (backendErr) {
+        if (mode === "server") {
+          throw backendErr;
+        }
+        console.warn("[SaveHandler] Backend conversion failed for outputurls, falling back to wasm", backendErr);
+      }
+    }
+
+    // 2. 本地 WASM 转码模式（或降级）
+    if (!outputBinUrl) {
+      const { objectUrl, media } = await convertToEditorBin(file, fileName);
+      outputBinUrl = objectUrl;
+      imagesMap = media?.images || {};
+      mediaDataMap = media?.mediaData;
+    }
+
+    // 3. 同步媒体图片到主文档 assets 和 iframe 注册表，保证在编辑器内显示及保存时不丢失
+    const assets = getDocumentAssets(docId);
+    if (assets) {
+      if (imagesMap && Object.keys(imagesMap).length > 0) {
+        assets.images = { ...assets.images, ...imagesMap };
+      }
+      if (mediaDataMap && Object.keys(mediaDataMap).length > 0) {
+        assets.mediaData = { ...assets.mediaData, ...mediaDataMap };
+      }
+    }
+
+    if (mediaDataMap && imagesMap) {
+      for (const [key, data] of Object.entries(mediaDataMap)) {
+        const url = imagesMap[key];
+        if (url) {
+          registerBlobImageInOnlyOffice(targetWindow, url, data, guessImageMime(key));
+        }
+      }
+    }
+
+    // 4. 组装 OnlyOffice 期望的映射字典，必须包含 output.bin
+    const dataResult: Record<string, string> = {
+      "output.bin": outputBinUrl,
+    };
+    for (const [key, val] of Object.entries(imagesMap)) {
+      const normalizedKey = key.replace(/^\.\/+/, "");
+      dataResult[normalizedKey] = val;
+    }
+
+    debugLog("finalizeOutputUrls success", {
+      docId,
+      outputBinUrl,
+      imagesCount: Object.keys(imagesMap).length,
+    });
+
+    return {
+      type: typeof cmd.c === "string" && cmd.c ? cmd.c : "save",
+      status: "ok",
+      data: dataResult,
+      filetype:
+        typeof cmd.outputformat === "number"
+          ? String(cmd.outputformat)
+          : typeof cmd.outputformat === "string"
+            ? cmd.outputformat
+            : "65",
+    };
+  } catch (error) {
+    console.error("[SaveHandler] finalizeOutputUrls failed", error);
+    return {
+      type: typeof cmd.c === "string" && cmd.c ? cmd.c : "save",
+      status: "ok",
+      data: {},
+      filetype: "",
+    };
+  }
+}
+
 async function handleSaveCommand(
   targetWindow: Window,
   cmd: SaveCommand,
@@ -557,7 +743,12 @@ async function handleSaveCommand(
   const outputExt = resolveOutputExtension(cmd, getDocumentAssets(docId));
   debugLog("save command", { docId, savetype, outputExt });
 
+  const isOutputUrls = Boolean(cmd.outputurls);
+
   if (savetype === saveTypes.single || cmd.savetype === undefined) {
+    if (isOutputUrls) {
+      return await finalizeOutputUrls(targetWindow, docId, cmd, bytes);
+    }
     return await finalizeSave(targetWindow, docId, cmd, bytes);
   }
 
@@ -606,6 +797,10 @@ async function handleSaveCommand(
   if (result.status === 'error' || !result.data) {
     logger.error('Failed to finalize chunked upload', result.message);
     return buildResponse(cmd, createId("savekey-error"), outputExt);
+  }
+
+  if (Boolean(session.cmd.outputurls)) {
+    return await finalizeOutputUrls(targetWindow, session.docId, session.cmd, result.data);
   }
 
   return await finalizeSave(targetWindow, session.docId, session.cmd, result.data);
