@@ -102,6 +102,28 @@ function staticCopyPlugin() {
   };
 }
 
+function deployedConfigPlugin() {
+  const fileName = "deployed.config.mjs";
+  const configFile = path.join(rootDir, fileName);
+  return {
+    name: "onlyoffice-deployed-config",
+    configureServer(server: any) {
+      server.middlewares.use(`/${fileName}`, (_req: any, res: any, next: () => void) => {
+        if (!fs.existsSync(configFile)) return next();
+        res.setHeader("Content-Type", "text/javascript");
+        res.setHeader("Cache-Control", "no-cache");
+        fs.createReadStream(configFile).pipe(res);
+      });
+    },
+    closeBundle() {
+      if (!fs.existsSync(configFile)) return;
+      const dest = path.join(rootDir, "dist", fileName);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(configFile, dest);
+    },
+  };
+}
+
 import react from "@vitejs/plugin-react";
 import vue from "@vitejs/plugin-vue";
 
@@ -148,7 +170,7 @@ export default defineConfig({
       "Access-Control-Allow-Origin": "*",
     },
   },
-  plugins: [react(), vue(), staticCopyPlugin()],
+  plugins: [react(), vue(), staticCopyPlugin(), deployedConfigPlugin()],
   build: {
     rollupOptions: {
       input: {

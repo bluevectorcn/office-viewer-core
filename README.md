@@ -157,6 +157,26 @@ server {
 }
 ```
 
+### 部署配置（deployed.config.mjs）
+
+仓库根目录（与 `public` 同级）的 `deployed.config.mjs` 用于自定义部署级参数：
+
+| 字段 | 说明 |
+| --- | --- |
+| `logoJump` | 点击编辑器内 Logo 时跳转的地址。留空则使用默认地址 `https://www.airedgesoft.com` |
+| `customerName` | 客户名称，显示在编辑器“关于”弹窗中。留空则使用默认名称 `智研工软` |
+| `showLogo` | 是否展示编辑器 Logo，默认 `true`。设为 `false` 时强制隐藏（即使 `public/logo.png` 存在） |
+
+该文件会在构建时被拷贝到 `dist/deployed.config.mjs`，并由 `app.html` 入口在运行时动态加载，因此**部署后可直接修改 `dist/deployed.config.mjs` 而无需重新构建**。
+
+```js
+export const deployedConfig = {
+  logoJump: 'https://your-site.example.com',
+  customerName: '您的公司名称',
+  showLogo: true,
+};
+```
+
 ## NPM 包集成指南
 
 本项目已发布至 NPM，支持作为依赖集成到您的前端项目中。
