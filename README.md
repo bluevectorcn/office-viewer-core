@@ -157,6 +157,31 @@ server {
 }
 ```
 
+### 部署配置（deployed.config.mjs）
+
+仓库根目录（与 `public` 同级）的 `deployed.config.mjs` 用于自定义部署级参数（Logo 图片、点击跳转地址、关于信息中的客户名称等）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `logoJump` | 点击编辑器内 Logo 时跳转的地址。留空则使用默认地址 `https://www.airedgesoft.com` |
+| `customerName` | 客户名称，显示在编辑器“关于”弹窗中。留空则使用默认名称 `智研工软` |
+| `showLogo` | 是否展示编辑器 Logo，默认 `true`。设为 `false` 时强制隐藏（即使 `public/logo.png` 存在） |
+
+该文件会在构建时被自动拷贝到 `dist/deployed.config.mjs`，并由 `app.html` 入口在运行时动态加载。因此：
+- **物理部署**：部署后可直接修改 `dist/deployed.config.mjs` 而无需重新构建。
+- **Docker 容器部署**：支持在 `docker run` 时通过卷挂载（`-v`）直接覆盖容器内的 `/app/dist/deployed.config.mjs`，同时可挂载外部 Logo 图片替换 `/app/dist/logo.png`。
+
+配置文件内容示例：
+
+```js
+export const deployedConfig = {
+  logoJump: 'https://your-site.example.com',
+  customerName: '您的公司名称',
+  showLogo: true,
+};
+```
+
+
 ## NPM 包集成指南
 
 本项目已发布至 NPM，支持作为依赖集成到您的前端项目中。
@@ -310,15 +335,49 @@ PUSH=1 ./scripts/docker-build.sh full ghcr.io/bluevectorcn/office-viewer-core:la
 | `NO_CACHE` | `0`           | 设为 `1` 禁用构建缓存        |
 | `PUSH`     | `0`           | 设为 `1` 构建后推送镜像      |
 
+### 容器运行环境变量
+
+容器运行时（`server-go`）支持通过以下环境变量定制服务行为：
+
+| 变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `PORT` | `3000` | HTTP 服务监听端口 |
+| `CONTEXT_PATH` | 空 (`""`) | **子路径部署前缀**（如 `/office`）。当服务通过反向代理（如 Nginx）挂载在子路径下，或调用方通过带前缀的集成路由（如 `/office/open`、`/office/preview`）访问时，**必须**配置该变量。若未配置会导致页面路由匹配失败并错误回退到 Playground 首页，且引发静态资源 MIME 类型错误 |
+| `MAX_CONCURRENT_TASKS` | `4` | 最大并发转码任务数，防止 CPU 耗尽 |
+| `TEMP_DIR` | `/app/temp` | 文档转换任务的临时工作目录 |
+| `FONTS_DIR` | `/app/assets/fonts` | 字体源文件目录，启动脚本基于此目录生成字体产物 |
+
 ### 运行
 
-**内置字体镜像**（开箱即用，无需额外配置）：
+**1. 内置字体镜像**（开箱即用，默认部署在根路径）：
 
 ```bash
 docker run -d -p 3000:3000 ghcr.io/bluevectorcn/office-viewer-core:latest
 ```
 
-**外挂字体**（两种镜像均支持，挂载到 `/app/assets/fonts` 即可覆盖字体源）：
+**2. 子路径部署（配置 `CONTEXT_PATH`）**：
+
+若您通过子路径（例如 `http://your-domain.com/office/open?...`）访问服务，或通过 Nginx 保留前缀反代，需通过 `-e CONTEXT_PATH=/office` 启动：
+
+```bash
+docker run -d -p 3000:3000 \
+  -e CONTEXT_PATH=/office \
+  ghcr.io/bluevectorcn/office-viewer-core:latest
+```
+
+**3. 运行时外部替换 Logo 与部署配置（`deployed.config.mjs`）**：
+
+无需重新构建镜像，直接通过挂载外部配置文件与 Logo 即可实现客户定制化：
+
+```bash
+docker run -d -p 3000:3000 \
+  -e CONTEXT_PATH=/office \
+  -v /path/to/your/deployed.config.mjs:/app/dist/deployed.config.mjs \
+  -v /path/to/your/logo.png:/app/dist/logo.png \
+  ghcr.io/bluevectorcn/office-viewer-core:latest
+```
+
+**4. 外挂字体**（两种镜像均支持，挂载到 `/app/assets/fonts` 即可覆盖字体源）：
 
 ```bash
 docker run -d -p 3000:3000 \
